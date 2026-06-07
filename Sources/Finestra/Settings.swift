@@ -1,0 +1,95 @@
+import Foundation
+
+/// Dauerhaft gespeicherte Einstellungen (UserDefaults).
+enum Settings {
+    private static let d = UserDefaults.standard
+
+    private static let enabledKey = "enabled"
+    /// Master-Schalter: werden neue Finder-Fenster automatisch platziert?
+    static var enabled: Bool {
+        get { d.object(forKey: enabledKey) as? Bool ?? true }
+        set { d.set(newValue, forKey: enabledKey) }
+    }
+
+    private static let targetModeKey = "targetMode"
+    /// 0 = auf dem Monitor lassen, auf dem es aufgeht; 1 = fester Zielmonitor.
+    static var targetMode: Int {
+        get { d.object(forKey: targetModeKey) as? Int ?? 0 }
+        set { d.set(newValue, forKey: targetModeKey) }
+    }
+
+    private static let targetDisplayKey = "targetDisplayID"
+    /// CGDirectDisplayID des gewaehlten Zielmonitors (nur bei targetMode == 1).
+    static var targetDisplayID: UInt32 {
+        get { UInt32(d.object(forKey: targetDisplayKey) as? Int ?? 0) }
+        set { d.set(Int(newValue), forKey: targetDisplayKey) }
+    }
+
+    private static let sizeModeKey = "sizeMode"
+    /// 0 = feste Pixelgroesse; 1 = Anteil am Bildschirm (Prozent).
+    static var sizeMode: Int {
+        get { d.object(forKey: sizeModeKey) as? Int ?? 0 }
+        set { d.set(newValue, forKey: sizeModeKey) }
+    }
+
+    private static let widthKey = "width"
+    /// Feste Breite in Punkten (640-6000).
+    static var width: Double {
+        get { let v = d.object(forKey: widthKey) as? Double ?? 1440; return min(6000, max(400, v)) }
+        set { d.set(min(6000, max(400, newValue)), forKey: widthKey) }
+    }
+
+    private static let heightKey = "height"
+    /// Feste Hoehe in Punkten (400-4000).
+    static var height: Double {
+        get { let v = d.object(forKey: heightKey) as? Double ?? 900; return min(4000, max(300, v)) }
+        set { d.set(min(4000, max(300, newValue)), forKey: heightKey) }
+    }
+
+    private static let percentWKey = "percentW"
+    /// Breiten-Anteil am sichtbaren Bildschirm (0.2-1.0).
+    static var percentW: Double {
+        get { let v = d.object(forKey: percentWKey) as? Double ?? 0.66; return min(1.0, max(0.2, v)) }
+        set { d.set(min(1.0, max(0.2, newValue)), forKey: percentWKey) }
+    }
+
+    private static let percentHKey = "percentH"
+    /// Hoehen-Anteil am sichtbaren Bildschirm (0.2-1.0).
+    static var percentH: Double {
+        get { let v = d.object(forKey: percentHKey) as? Double ?? 0.85; return min(1.0, max(0.2, v)) }
+        set { d.set(min(1.0, max(0.2, newValue)), forKey: percentHKey) }
+    }
+
+    private static let positionKey = "position"
+    /// Index in WindowPosition.allCases (Standard: 4 = mittig).
+    static var position: Int {
+        get { let v = d.object(forKey: positionKey) as? Int ?? 4; return min(8, max(0, v)) }
+        set { d.set(min(8, max(0, newValue)), forKey: positionKey) }
+    }
+
+    private static let moveDeclinedKey = "moveDeclined"
+    /// Hat der Nutzer das Verschieben nach /Applications einmal abgelehnt?
+    static var moveDeclined: Bool {
+        get { d.bool(forKey: moveDeclinedKey) }
+        set { d.set(newValue, forKey: moveDeclinedKey) }
+    }
+
+    /// Die gerade aktive Platzierungs-Konfiguration als Wertobjekt.
+    static var placement: Placement {
+        Placement(sizeMode: sizeMode,
+                  width: width, height: height,
+                  percentW: percentW, percentH: percentH,
+                  position: WindowPosition(rawValue: position) ?? .center)
+    }
+}
+
+/// Gaengige Pixel-Vorlagen fuer die feste Groesse.
+enum SizePreset {
+    static let all: [(label: String, w: Double, h: Double)] = [
+        ("2560 × 1440", 2560, 1440),
+        ("1920 × 1080", 1920, 1080),
+        ("1680 × 1050", 1680, 1050),
+        ("1440 × 900",  1440, 900),
+        ("1280 × 800",  1280, 800),
+    ]
+}
