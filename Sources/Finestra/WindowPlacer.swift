@@ -19,6 +19,8 @@ struct Placement {
     var percentW: Double
     var percentH: Double
     var position: WindowPosition
+    var offsetX: Double = 0
+    var offsetY: Double = 0
 
     /// Berechnet den Ziel-Rahmen (Quartz, oben-links) im sichtbaren Bereich `vis`.
     func rect(in vis: CGRect) -> CGRect {
@@ -35,18 +37,25 @@ struct Placement {
         w = min(w, vis.width)
         h = min(h, vis.height)
 
-        let x: CGFloat
+        var x: CGFloat
         switch position.column {
         case 0:  x = vis.minX
         case 2:  x = vis.maxX - w
         default: x = vis.minX + (vis.width - w) / 2
         }
-        let y: CGFloat
+        var y: CGFloat
         switch position.row {
         case 0:  y = vis.minY                        // oben (Quartz: kleinstes y)
         case 2:  y = vis.maxY - h                    // unten
         default: y = vis.minY + (vis.height - h) / 2 // mittig
         }
+
+        // Versatz anwenden, dann ins Sichtbare zurueckholen (Fenster bleibt auf dem Monitor).
+        x += CGFloat(offsetX)
+        y += CGFloat(offsetY)
+        x = min(max(x, vis.minX), vis.maxX - w)
+        y = min(max(y, vis.minY), vis.maxY - h)
+
         return CGRect(x: x.rounded(), y: y.rounded(), width: w.rounded(), height: h.rounded())
     }
 }

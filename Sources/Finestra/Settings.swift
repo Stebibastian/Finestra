@@ -67,6 +67,20 @@ enum Settings {
         set { d.set(min(8, max(0, newValue)), forKey: positionKey) }
     }
 
+    private static let offsetXKey = "offsetX"
+    /// Zusätzlicher horizontaler Versatz in Punkten (+ = nach rechts), -3000…3000.
+    static var offsetX: Double {
+        get { let v = d.object(forKey: offsetXKey) as? Double ?? 0; return min(3000, max(-3000, v)) }
+        set { d.set(min(3000, max(-3000, newValue)), forKey: offsetXKey) }
+    }
+
+    private static let offsetYKey = "offsetY"
+    /// Zusätzlicher vertikaler Versatz in Punkten (+ = nach unten), -3000…3000.
+    static var offsetY: Double {
+        get { let v = d.object(forKey: offsetYKey) as? Double ?? 0; return min(3000, max(-3000, v)) }
+        set { d.set(min(3000, max(-3000, newValue)), forKey: offsetYKey) }
+    }
+
     private static let moveDeclinedKey = "moveDeclined"
     /// Hat der Nutzer das Verschieben nach /Applications einmal abgelehnt?
     static var moveDeclined: Bool {
@@ -79,7 +93,8 @@ enum Settings {
         Placement(sizeMode: sizeMode,
                   width: width, height: height,
                   percentW: percentW, percentH: percentH,
-                  position: WindowPosition(rawValue: position) ?? .center)
+                  position: WindowPosition(rawValue: position) ?? .center,
+                  offsetX: offsetX, offsetY: offsetY)
     }
 }
 

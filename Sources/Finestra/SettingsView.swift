@@ -17,6 +17,8 @@ struct SettingsView: View {
     @State private var percentW = Settings.percentW
     @State private var percentH = Settings.percentH
     @State private var position = Settings.position
+    @State private var offsetX = Settings.offsetX
+    @State private var offsetY = Settings.offsetY
     @State private var login = false
     @State private var screens: [ScreenInfo] = ScreenInfo.all()
 
@@ -29,6 +31,15 @@ struct SettingsView: View {
         return f
     }()
 
+    private static let signedFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .none
+        f.maximumFractionDigits = 0
+        f.minimum = -3000
+        f.maximum = 3000
+        return f
+    }()
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             header
@@ -36,7 +47,9 @@ struct SettingsView: View {
                 MonitorMap(screens: screens,
                            targetID: targetMode == 1 ? targetID : nil,
                            followMode: targetMode == 0,
-                           previewRect: previewRect)
+                           previewRect: previewRect,
+                           hint: { positionHint(for: $0) },
+                           onSelect: { id in targetMode = 1; targetID = id })
                     .frame(height: 180)
                     .frame(maxWidth: .infinity)
             }
@@ -64,6 +77,8 @@ struct SettingsView: View {
         .onChange(of: percentW) { v in Settings.percentW = v }
         .onChange(of: percentH) { v in Settings.percentH = v }
         .onChange(of: position) { v in Settings.position = v }
+        .onChange(of: offsetX) { v in Settings.offsetX = v }
+        .onChange(of: offsetY) { v in Settings.offsetY = v }
     }
 
     // MARK: - Kopf
@@ -92,15 +107,44 @@ struct SettingsView: View {
                 })) {
                 Text(Strings.targetFollow).tag(UInt32(0))
                 ForEach(screens) { s in
-                    Text(s.name + (s.isMain ? " · Haupt" : "")).tag(s.id)
+                    Text(hintedName(for: s)).tag(s.id)
                 }
             }
             .labelsHidden()
             .pickerStyle(.menu)
 
-            Text(targetMode == 0 ? Strings.targetFollowHint : " ")
+            Text(targetMode == 0 ? Strings.targetFollowHint : Strings.targetFixedHint)
                 .font(.caption).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(Strings.targetMapHint)
+                .font(.caption).foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    /// Monitorname samt Lage-Hinweis (links/rechts/…) und „Haupt", da gleiche Modelle gleich heissen.
+    private func hintedName(for s: ScreenInfo) -> String {
+        var parts: [String] = []
+        let hint = positionHint(for: s)
+        if !hint.isEmpty { parts.append(hint) }
+        if s.isMain { parts.append("Haupt") }
+        return parts.isEmpty ? s.name : "\(s.name) - \(parts.joined(separator: ", "))"
+    }
+
+    /// Lage eines Monitors relativ zu den anderen: links/rechts bzw. oben/unten.
+    private func positionHint(for s: ScreenInfo) -> String {
+        guard screens.count > 1 else { return "" }
+        let xs = Set(screens.map { Int($0.frameQuartz.minX.rounded()) })
+        if xs.count == screens.count {
+            let sorted = screens.sorted { $0.frameQuartz.minX < $1.frameQuartz.minX }
+            if s.id == sorted.first?.id { return "links" }
+            if s.id == sorted.last?.id { return "rechts" }
+            return "Mitte"
+        }
+        let sorted = screens.sorted { $0.frameQuartz.minY < $1.frameQuartz.minY }
+        if s.id == sorted.first?.id { return "oben" }
+        if s.id == sorted.last?.id { return "unten" }
+        return ""
     }
 
     // MARK: - Groesse
@@ -163,23 +207,52 @@ struct SettingsView: View {
     // MARK: - Position
 
     private var positionControls: some View {
-        HStack(alignment: .center, spacing: 16) {
-            VStack(spacing: 5) {
-                ForEach(0..<3, id: \.self) { row in
-                    HStack(spacing: 5) {
-                        ForEach(0..<3, id: \.self) { col in
-                            positionCell(index: row * 3 + col)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 16) {
+                VStack(spacing: 5) {
+                    ForEach(0..<3, id: \.self) { row in
+                        HStack(spacing: 5) {
+                            ForEach(0..<3, id: \.self) { col in
+                                positionCell(index: row * 3 + col)
+                            }
                         }
                     }
                 }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(Strings.positionNames[position])
+                        .font(.callout.weight(.medium))
+                    Text(sizeSummary)
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(Strings.positionNames[position])
-                    .font(.callout.weight(.medium))
-                Text(sizeSummary)
-                    .font(.caption).foregroundStyle(.secondary)
+            Divider()
+            offsetControls
+        }
+    }
+
+    private var offsetControls: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 14) {
+                Text(Strings.offsetLabel).frame(width: 54, alignment: .leading)
+                offsetField("X", $offsetX)
+                offsetField("Y", $offsetY)
+                Button(Strings.offsetReset) { offsetX = 0; offsetY = 0 }
+                    .controlSize(.small)
+                    .disabled(offsetX == 0 && offsetY == 0)
             }
-            Spacer()
+            Text(Strings.offsetHint).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func offsetField(_ label: String, _ value: Binding<Double>) -> some View {
+        HStack(spacing: 5) {
+            Text(label).foregroundStyle(.secondary)
+            TextField("", value: value, formatter: Self.signedFormatter)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 62)
+            Stepper("", value: value, in: -3000...3000, step: 10)
+                .labelsHidden()
         }
     }
 
@@ -253,7 +326,8 @@ struct SettingsView: View {
     private var previewPlacement: Placement {
         Placement(sizeMode: sizeMode, width: width, height: height,
                   percentW: percentW, percentH: percentH,
-                  position: WindowPosition(rawValue: position) ?? .center)
+                  position: WindowPosition(rawValue: position) ?? .center,
+                  offsetX: offsetX, offsetY: offsetY)
     }
 
     private var previewRect: CGRect? {
@@ -271,11 +345,14 @@ struct SettingsView: View {
 }
 
 /// Zeichnet die angeschlossenen Monitore massstabsgetreu samt Vorschau-Fenster.
+/// Ein Klick auf einen Monitor waehlt ihn als festen Zielmonitor.
 struct MonitorMap: View {
     let screens: [ScreenInfo]
     let targetID: UInt32?     // nil = Folge-Modus (kein fester Zielmonitor)
     let followMode: Bool
     let previewRect: CGRect?
+    let hint: (ScreenInfo) -> String
+    let onSelect: (UInt32) -> Void
 
     var body: some View {
         GeometryReader { geo in
@@ -293,6 +370,7 @@ struct MonitorMap: View {
                         .frame(width: max(r.width, 6), height: max(r.height, 6))
                         .position(x: r.midX, y: r.midY)
                         .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+                        .allowsHitTesting(false)   // Klicks gehen an den Monitor darunter
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
@@ -301,17 +379,18 @@ struct MonitorMap: View {
 
     private func cell(for screen: ScreenInfo, layout: MapLayout) -> some View {
         let r = layout.transform(screen.frameQuartz)
-        let isTarget = followMode || screen.id == targetID
+        let isTarget = !followMode && screen.id == targetID
+        let lage = hint(screen)
         return RoundedRectangle(cornerRadius: 6)
-            .fill(isTarget ? Color.accentColor.opacity(0.10) : Color.gray.opacity(0.10))
+            .fill(isTarget ? Color.accentColor.opacity(0.14) : Color.gray.opacity(0.10))
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(isTarget ? Color.accentColor.opacity(0.8) : Color.gray.opacity(0.45),
-                                  lineWidth: 1.2))
+                    .strokeBorder(isTarget ? Color.accentColor : Color.gray.opacity(0.45),
+                                  lineWidth: isTarget ? 2 : 1.2))
             .overlay(
                 VStack(spacing: 1) {
-                    Text(screen.name)
-                        .font(.system(size: 10, weight: .medium))
+                    Text(lage.isEmpty ? screen.name : lage.capitalized)
+                        .font(.system(size: 10, weight: .semibold))
                         .lineLimit(1)
                     Text("\(Int(screen.frameQuartz.width)) × \(Int(screen.frameQuartz.height))")
                         .font(.system(size: 9))
@@ -323,6 +402,8 @@ struct MonitorMap: View {
                 .padding(2)
             )
             .frame(width: r.width, height: r.height)
+            .contentShape(Rectangle())
+            .onTapGesture { onSelect(screen.id) }
             .position(x: r.midX, y: r.midY)
     }
 }
