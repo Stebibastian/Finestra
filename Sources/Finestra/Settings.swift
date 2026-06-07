@@ -88,13 +88,54 @@ enum Settings {
         set { d.set(newValue, forKey: moveDeclinedKey) }
     }
 
-    /// Die gerade aktive Platzierungs-Konfiguration als Wertobjekt.
-    static var placement: Placement {
-        Placement(sizeMode: sizeMode,
-                  width: width, height: height,
-                  percentW: percentW, percentH: percentH,
-                  position: WindowPosition(rawValue: position) ?? .center,
-                  offsetX: offsetX, offsetY: offsetY)
+    /// Standard-/Rückfall-Konfiguration (aus den Einzelwerten oben). Dient als Vorlage
+    /// für Monitore, die noch keine eigene Konfiguration haben.
+    static var defaultConfig: Placement {
+        get {
+            Placement(sizeMode: sizeMode,
+                      width: width, height: height,
+                      percentW: percentW, percentH: percentH,
+                      position: WindowPosition(rawValue: position) ?? .center,
+                      offsetX: offsetX, offsetY: offsetY)
+        }
+        set {
+            sizeMode = newValue.sizeMode
+            width = newValue.width
+            height = newValue.height
+            percentW = newValue.percentW
+            percentH = newValue.percentH
+            position = newValue.position.rawValue
+            offsetX = newValue.offsetX
+            offsetY = newValue.offsetY
+        }
+    }
+
+    private static let perMonitorKey = "perMonitorConfigs"
+    /// Pro Monitor (Schlüssel = CGDirectDisplayID als String) eine eigene Konfiguration.
+    static var perMonitorConfigs: [String: Placement] {
+        get {
+            guard let data = d.data(forKey: perMonitorKey),
+                  let dict = try? JSONDecoder().decode([String: Placement].self, from: data)
+            else { return [:] }
+            return dict
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                d.set(data, forKey: perMonitorKey)
+            }
+        }
+    }
+
+    /// Konfiguration für einen bestimmten Monitor - eigene, sonst der Standard.
+    static func config(forDisplay id: UInt32) -> Placement {
+        perMonitorConfigs[String(id)] ?? defaultConfig
+    }
+
+    /// Speichert die Konfiguration für einen bestimmten Monitor.
+    static func setConfig(_ c: Placement, forDisplay id: UInt32) {
+        var dict = perMonitorConfigs
+        dict[String(id)] = c
+        perMonitorConfigs = dict
     }
 }
 

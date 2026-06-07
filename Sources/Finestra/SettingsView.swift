@@ -1,8 +1,8 @@
 import SwiftUI
 import AppKit
 
-/// Das Einstellungsfenster: Monitore visuell, Zielmonitor, Groesse und Position
-/// einstellbar - mit Live-Vorschau, wo das Fenster landen wird.
+/// Das Einstellungsfenster: Monitore visuell, Zielmonitor, und - pro Monitor -
+/// Grösse, Position und Versatz, jeweils mit Live-Vorschau.
 struct SettingsView: View {
     let onToggleLogin: (Bool) -> Void
     let onCheckUpdate: () -> Void
@@ -11,14 +11,8 @@ struct SettingsView: View {
     @State private var enabled = Settings.enabled
     @State private var targetMode = Settings.targetMode
     @State private var targetID = Settings.targetDisplayID
-    @State private var sizeMode = Settings.sizeMode
-    @State private var width = Settings.width
-    @State private var height = Settings.height
-    @State private var percentW = Settings.percentW
-    @State private var percentH = Settings.percentH
-    @State private var position = Settings.position
-    @State private var offsetX = Settings.offsetX
-    @State private var offsetY = Settings.offsetY
+    @State private var focusedID: UInt32 = 0
+    @State private var cfg = Settings.defaultConfig
     @State private var login = false
     @State private var screens: [ScreenInfo] = ScreenInfo.all()
 
@@ -45,40 +39,40 @@ struct SettingsView: View {
             header
             box(Strings.sectionMonitors) {
                 MonitorMap(screens: screens,
-                           targetID: targetMode == 1 ? targetID : nil,
-                           followMode: targetMode == 0,
+                           highlightID: focusedID,
                            previewRect: previewRect,
                            hint: { positionHint(for: $0) },
-                           onSelect: { id in targetMode = 1; targetID = id })
+                           onSelect: { setFocus($0) })
                     .frame(height: 180)
                     .frame(maxWidth: .infinity)
+                if !mapCaption.isEmpty {
+                    Text(mapCaption)
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             box(Strings.sectionTarget) { targetControls }
-            box(Strings.sectionSize) { sizeControls }
-            box(Strings.sectionPosition) { positionControls }
+            box(boxTitle(Strings.sectionSize)) { sizeControls }
+            box(boxTitle(Strings.sectionPosition)) { positionControls }
             box(Strings.sectionGeneral) { generalControls }
         }
         .padding(20)
         .frame(width: 540)
         .onAppear {
-            refreshScreens()
+            screens = ScreenInfo.all()
             login = loginEnabled()
+            focusedID = initialFocus()
+            cfg = Settings.config(forDisplay: focusedID)
         }
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.didChangeScreenParametersNotification)) { _ in
             refreshScreens()
         }
+        .onChange(of: focusedID) { id in cfg = Settings.config(forDisplay: id) }
+        .onChange(of: cfg) { c in Settings.setConfig(c, forDisplay: focusedID) }
         .onChange(of: enabled) { v in Settings.enabled = v }
         .onChange(of: targetMode) { v in Settings.targetMode = v }
         .onChange(of: targetID) { v in Settings.targetDisplayID = v }
-        .onChange(of: sizeMode) { v in Settings.sizeMode = v }
-        .onChange(of: width) { v in Settings.width = v }
-        .onChange(of: height) { v in Settings.height = v }
-        .onChange(of: percentW) { v in Settings.percentW = v }
-        .onChange(of: percentH) { v in Settings.percentH = v }
-        .onChange(of: position) { v in Settings.position = v }
-        .onChange(of: offsetX) { v in Settings.offsetX = v }
-        .onChange(of: offsetY) { v in Settings.offsetY = v }
     }
 
     // MARK: - Kopf
@@ -103,7 +97,7 @@ struct SettingsView: View {
                 get: { targetMode == 0 ? 0 : targetID },
                 set: { v in
                     if v == 0 { targetMode = 0 }
-                    else { targetMode = 1; targetID = v }
+                    else { targetMode = 1; targetID = v; focusedID = v }
                 })) {
                 Text(Strings.targetFollow).tag(UInt32(0))
                 ForEach(screens) { s in
@@ -115,9 +109,6 @@ struct SettingsView: View {
 
             Text(targetMode == 0 ? Strings.targetFollowHint : Strings.targetFixedHint)
                 .font(.caption).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(Strings.targetMapHint)
-                .font(.caption).foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -147,36 +138,49 @@ struct SettingsView: View {
         return ""
     }
 
-    // MARK: - Groesse
+    // MARK: - Grösse (pro fokussiertem Monitor)
 
     private var sizeControls: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Picker("", selection: $sizeMode) {
+            if targetMode == 0 && screens.count > 1 {
+                HStack(spacing: 8) {
+                    Text(Strings.editMonitor).frame(width: 54, alignment: .leading)
+                    Picker("", selection: Binding<UInt32>(
+                        get: { focusedID }, set: { focusedID = $0 })) {
+                        ForEach(screens) { s in Text(hintedName(for: s)).tag(s.id) }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                }
+                Divider()
+            }
+
+            Picker("", selection: $cfg.sizeMode) {
                 Text(Strings.sizeFixed).tag(0)
                 Text(Strings.sizePercent).tag(1)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
 
-            if sizeMode == 0 {
+            if cfg.sizeMode == 0 {
                 HStack(spacing: 6) {
                     ForEach(SizePreset.all, id: \.label) { preset in
                         Button(preset.label) {
-                            width = preset.w
-                            height = preset.h
+                            cfg.width = preset.w
+                            cfg.height = preset.h
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
-                        .tint(width == preset.w && height == preset.h ? .accentColor : nil)
+                        .tint(cfg.width == preset.w && cfg.height == preset.h ? .accentColor : nil)
                     }
                 }
                 HStack(spacing: 16) {
-                    pixelField(Strings.sizeWidth, $width)
-                    pixelField(Strings.sizeHeight, $height)
+                    pixelField(Strings.sizeWidth, $cfg.width)
+                    pixelField(Strings.sizeHeight, $cfg.height)
                 }
             } else {
-                percentRow(Strings.sizeWidth, $percentW)
-                percentRow(Strings.sizeHeight, $percentH)
+                percentRow(Strings.sizeWidth, $cfg.percentW)
+                percentRow(Strings.sizeHeight, $cfg.percentH)
             }
         }
     }
@@ -204,7 +208,7 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Position
+    // MARK: - Position (pro fokussiertem Monitor)
 
     private var positionControls: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -219,7 +223,7 @@ struct SettingsView: View {
                     }
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(Strings.positionNames[position])
+                    Text(Strings.positionNames[cfg.position.rawValue])
                         .font(.callout.weight(.medium))
                     Text(sizeSummary)
                         .font(.caption).foregroundStyle(.secondary)
@@ -235,11 +239,11 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 14) {
                 Text(Strings.offsetLabel).frame(width: 54, alignment: .leading)
-                offsetField("X", $offsetX)
-                offsetField("Y", $offsetY)
-                Button(Strings.offsetReset) { offsetX = 0; offsetY = 0 }
+                offsetField("X", $cfg.offsetX)
+                offsetField("Y", $cfg.offsetY)
+                Button(Strings.offsetReset) { cfg.offsetX = 0; cfg.offsetY = 0 }
                     .controlSize(.small)
-                    .disabled(offsetX == 0 && offsetY == 0)
+                    .disabled(cfg.offsetX == 0 && cfg.offsetY == 0)
             }
             Text(Strings.offsetHint).font(.caption).foregroundStyle(.secondary)
         }
@@ -257,14 +261,14 @@ struct SettingsView: View {
     }
 
     private func positionCell(index: Int) -> some View {
-        let selected = position == index
+        let selected = cfg.position.rawValue == index
         let col = index % 3
         let row = index / 3
         let align = Alignment(
             horizontal: col == 0 ? .leading : (col == 2 ? .trailing : .center),
             vertical: row == 0 ? .top : (row == 2 ? .bottom : .center))
         return Button {
-            position = index
+            cfg.position = WindowPosition(rawValue: index) ?? .center
         } label: {
             RoundedRectangle(cornerRadius: 5)
                 .fill(selected ? Color.accentColor.opacity(0.18) : Color.gray.opacity(0.12))
@@ -313,43 +317,64 @@ struct SettingsView: View {
         }
     }
 
+    /// Box-Titel mit fokussiertem Monitor, falls mehrere angeschlossen sind.
+    private func boxTitle(_ base: String) -> String {
+        guard screens.count > 1, !focusedLabel.isEmpty else { return base }
+        return "\(base) · \(focusedLabel)"
+    }
+
+    private var focusedLabel: String {
+        guard let s = ScreenInfo.byID(focusedID, in: screens) else { return "" }
+        let h = positionHint(for: s)
+        return h.isEmpty ? s.name : h.capitalized
+    }
+
+    private var mapCaption: String {
+        guard screens.count > 1 else { return "" }
+        return targetMode == 1 ? Strings.mapHintFixed : Strings.mapHintFollow
+    }
+
+    private func initialFocus() -> UInt32 {
+        if targetMode == 1, ScreenInfo.byID(targetID, in: screens) != nil { return targetID }
+        if let m = ScreenInfo.main(in: screens) { return m.id }
+        return screens.first?.id ?? 0
+    }
+
+    private func setFocus(_ id: UInt32) {
+        focusedID = id
+        if targetMode == 1 { targetID = id }
+    }
+
     private func refreshScreens() {
         screens = ScreenInfo.all()
+        if ScreenInfo.byID(focusedID, in: screens) == nil {
+            focusedID = ScreenInfo.main(in: screens)?.id ?? screens.first?.id ?? 0
+        }
     }
 
-    /// Der Monitor, fuer den die Vorschau gezeichnet wird.
     private var previewScreen: ScreenInfo? {
-        if targetMode == 1, let s = ScreenInfo.byID(targetID, in: screens) { return s }
-        return ScreenInfo.main(in: screens) ?? screens.first
-    }
-
-    private var previewPlacement: Placement {
-        Placement(sizeMode: sizeMode, width: width, height: height,
-                  percentW: percentW, percentH: percentH,
-                  position: WindowPosition(rawValue: position) ?? .center,
-                  offsetX: offsetX, offsetY: offsetY)
+        ScreenInfo.byID(focusedID, in: screens) ?? ScreenInfo.main(in: screens) ?? screens.first
     }
 
     private var previewRect: CGRect? {
         guard let s = previewScreen else { return nil }
-        return previewPlacement.rect(in: s.visibleQuartz)
+        return cfg.rect(in: s.visibleQuartz)
     }
 
     private var sizeSummary: String {
-        if sizeMode == 0 {
-            return "\(Int(width)) × \(Int(height)) px"
+        if cfg.sizeMode == 0 {
+            return "\(Int(cfg.width)) × \(Int(cfg.height)) px"
         } else {
-            return "\(Int((percentW * 100).rounded())) % × \(Int((percentH * 100).rounded())) %"
+            return "\(Int((cfg.percentW * 100).rounded())) % × \(Int((cfg.percentH * 100).rounded())) %"
         }
     }
 }
 
 /// Zeichnet die angeschlossenen Monitore massstabsgetreu samt Vorschau-Fenster.
-/// Ein Klick auf einen Monitor waehlt ihn als festen Zielmonitor.
+/// Ein Klick auf einen Monitor wählt ihn (Zielmonitor bzw. zu bearbeitenden Monitor).
 struct MonitorMap: View {
     let screens: [ScreenInfo]
-    let targetID: UInt32?     // nil = Folge-Modus (kein fester Zielmonitor)
-    let followMode: Bool
+    let highlightID: UInt32?
     let previewRect: CGRect?
     let hint: (ScreenInfo) -> String
     let onSelect: (UInt32) -> Void
@@ -379,14 +404,14 @@ struct MonitorMap: View {
 
     private func cell(for screen: ScreenInfo, layout: MapLayout) -> some View {
         let r = layout.transform(screen.frameQuartz)
-        let isTarget = !followMode && screen.id == targetID
+        let isFocused = screen.id == highlightID
         let lage = hint(screen)
         return RoundedRectangle(cornerRadius: 6)
-            .fill(isTarget ? Color.accentColor.opacity(0.14) : Color.gray.opacity(0.10))
+            .fill(isFocused ? Color.accentColor.opacity(0.14) : Color.gray.opacity(0.10))
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(isTarget ? Color.accentColor : Color.gray.opacity(0.45),
-                                  lineWidth: isTarget ? 2 : 1.2))
+                    .strokeBorder(isFocused ? Color.accentColor : Color.gray.opacity(0.45),
+                                  lineWidth: isFocused ? 2 : 1.2))
             .overlay(
                 VStack(spacing: 1) {
                     Text(lage.isEmpty ? screen.name : lage.capitalized)
@@ -408,7 +433,7 @@ struct MonitorMap: View {
     }
 }
 
-/// Rechnet globale Quartz-Koordinaten in die Zeichenflaeche um (massstabsgetreu, zentriert).
+/// Rechnet globale Quartz-Koordinaten in die Zeichenfläche um (massstabsgetreu, zentriert).
 struct MapLayout {
     let scale: CGFloat
     let bbox: CGRect

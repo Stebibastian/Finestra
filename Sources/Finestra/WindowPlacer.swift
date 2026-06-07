@@ -2,7 +2,7 @@ import AppKit
 import ApplicationServices
 
 /// Position eines Fensters im sichtbaren Bereich eines Monitors (3×3-Raster).
-enum WindowPosition: Int, CaseIterable {
+enum WindowPosition: Int, CaseIterable, Codable, Equatable {
     case topLeft, topCenter, topRight
     case centerLeft, center, centerRight
     case bottomLeft, bottomCenter, bottomRight
@@ -11,8 +11,8 @@ enum WindowPosition: Int, CaseIterable {
     var row: Int { rawValue / 3 }      // 0 = oben, 1 = mitte, 2 = unten
 }
 
-/// Beschreibt, wie gross ein Fenster werden und wohin es soll.
-struct Placement {
+/// Beschreibt, wie gross ein Fenster werden und wohin es soll. Pro Monitor speicherbar.
+struct Placement: Codable, Equatable {
     var sizeMode: Int            // 0 = feste Groesse, 1 = Prozent
     var width: Double
     var height: Double
@@ -79,7 +79,9 @@ enum WindowPlacer {
             target = ScreenInfo.main(in: screens) ?? screens[0]
         }
 
-        let rect = Settings.placement.rect(in: target.visibleQuartz)
+        // Pro Monitor eigene Konfiguration (Folge-Modus: der Monitor, auf dem das
+        // Fenster aufgeht; Fix-Modus: der gewaehlte Zielmonitor).
+        let rect = Settings.config(forDisplay: target.id).rect(in: target.visibleQuartz)
         setFrame(window, rect)
     }
 

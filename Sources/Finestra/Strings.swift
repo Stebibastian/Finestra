@@ -30,6 +30,10 @@ enum Strings {
     static let targetMapHint = "Tipp: In der Karte oben direkt auf einen Monitor klicken, um ihn als Ziel zu wählen."
     static let targetMain = "Hauptmonitor"
 
+    static let mapHintFixed = "Klick auf einen Monitor in der Karte wählt den Zielmonitor."
+    static let mapHintFollow = "Klick wählt den Monitor, dessen Werte Du unten einstellst - im Folge-Modus hat jeder Monitor eigene Grösse und Position."
+    static let editMonitor = "Monitor"
+
     // Grösse
     static let sizeFixed = "Feste Grösse"
     static let sizePercent = "Anteil am Bildschirm"
