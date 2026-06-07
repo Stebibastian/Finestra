@@ -6,6 +6,7 @@ import AppKit
 struct SettingsView: View {
     let onToggleLogin: (Bool) -> Void
     let onCheckUpdate: () -> Void
+    let onShowLog: () -> Void
     let loginEnabled: () -> Bool
 
     @State private var enabled = Settings.enabled
@@ -296,6 +297,11 @@ struct SettingsView: View {
                 set: { v in login = v; onToggleLogin(v) }))
                 .toggleStyle(.switch)
             Divider()
+            HStack {
+                Button(Strings.logButton) { onShowLog() }
+                    .controlSize(.small)
+                Spacer()
+            }
             HStack {
                 Text("\(Strings.version) \(UpdateChecker.currentVersion)")
                     .font(.caption).foregroundStyle(.secondary)

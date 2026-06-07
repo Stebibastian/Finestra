@@ -8,6 +8,7 @@ final class SettingsWindow {
 
     var onToggleLogin: ((Bool) -> Void)?
     var onCheckUpdate: (() -> Void)?
+    var onShowLog: (() -> Void)?
     var loginEnabled: (() -> Bool)?
 
     func present() {
@@ -21,6 +22,7 @@ final class SettingsWindow {
         let view = SettingsView(
             onToggleLogin: { [weak self] on in self?.onToggleLogin?(on) },
             onCheckUpdate: { [weak self] in self?.onCheckUpdate?() },
+            onShowLog: { [weak self] in self?.onShowLog?() },
             loginEnabled: { [weak self] in self?.loginEnabled?() ?? false }
         )
         let controller = NSHostingController(rootView: view)

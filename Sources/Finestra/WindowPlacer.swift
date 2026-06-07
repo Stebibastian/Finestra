@@ -63,26 +63,67 @@ struct Placement: Codable, Equatable {
 /// Setzt Position/Groesse echter Fenster ueber die Accessibility-API.
 enum WindowPlacer {
     /// Platziert ein Fenster gemaess den aktuellen Einstellungen.
-    static func place(_ window: AXUIElement) {
+    static func place(_ window: AXUIElement, windowID: CGWindowID? = nil) {
+        let tag = windowID.map { "#\($0) " } ?? ""
         let screens = ScreenInfo.all()
-        guard !screens.isEmpty else { return }
+        guard !screens.isEmpty else { Log.log("\(tag)Platzieren: keine Monitore gefunden"); return }
 
+        let pos = position(of: window)
         let target: ScreenInfo
+        let how: String
         if Settings.targetMode == 1,
            let chosen = ScreenInfo.byID(Settings.targetDisplayID, in: screens) {
             target = chosen
+            how = "Fix → \(chosen.name)"
         } else if Settings.targetMode == 0,
-                  let pos = position(of: window),
-                  let here = ScreenInfo.containing(point: pos, in: screens) {
+                  let p = pos,
+                  let here = ScreenInfo.containing(point: p, in: screens) {
             target = here
+            how = "Folge → \(here.name)"
         } else {
             target = ScreenInfo.main(in: screens) ?? screens[0]
+            how = Settings.targetMode == 0
+                ? "Folge → Rueckfall Haupt (\(target.name)); AX-Position lag auf keinem Monitor"
+                : "Fix → Rueckfall Haupt (\(target.name)); Zielmonitor nicht angeschlossen"
         }
 
         // Pro Monitor eigene Konfiguration (Folge-Modus: der Monitor, auf dem das
         // Fenster aufgeht; Fix-Modus: der gewaehlte Zielmonitor). Stabiler Schlüssel.
-        let rect = Settings.config(forKey: target.stableKey).rect(in: target.visibleQuartz)
+        let cfg = Settings.config(forKey: target.stableKey)
+        let rect = cfg.rect(in: target.visibleQuartz)
+
+        let posText = pos.map { "(\(Int($0.x)),\(Int($0.y)))" } ?? "nicht lesbar"
+        let sizeText = cfg.sizeMode == 1
+            ? "\(Int(cfg.percentW * 100))%×\(Int(cfg.percentH * 100))%"
+            : "\(Int(cfg.width))×\(Int(cfg.height))px"
+        Log.log("\(tag)AX-Pos \(posText) | \(how) | Konfig \(sizeText) | sichtbar \(rectText(target.visibleQuartz)) | setze \(rectText(rect))")
+
         setFrame(window, rect)
+
+        // Nachkontrolle: hat es gegriffen? (Finder verschiebt manchmal nach.)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            if let after = frame(of: window) {
+                let ok = abs(after.width - rect.width) < 12 && abs(after.height - rect.height) < 12
+                Log.log("\(tag)Ergebnis \(rectText(after))\(ok ? " ✓" : " ⚠ weicht ab - setze erneut")")
+                if !ok { setFrame(window, rect) }   // einmal nachsetzen
+            }
+        }
+    }
+
+    private static func rectText(_ r: CGRect) -> String {
+        "[x\(Int(r.minX)) y\(Int(r.minY)) \(Int(r.width))×\(Int(r.height))]"
+    }
+
+    /// Aktueller Rahmen (Position + Groesse) eines Fensters in Quartz-Koordinaten.
+    static func frame(of window: AXUIElement) -> CGRect? {
+        guard let pos = position(of: window) else { return nil }
+        var sizeValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &sizeValue) == .success,
+              let sizeValue else { return nil }
+        var size = CGSize.zero
+        // swiftlint:disable:next force_cast
+        AXValueGetValue(sizeValue as! AXValue, .cgSize, &size)
+        return CGRect(origin: pos, size: size)
     }
 
     /// Setzt Groesse + Position. Position wird zweimal gesetzt, weil manche Fenster

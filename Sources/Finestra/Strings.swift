@@ -10,8 +10,18 @@ enum Strings {
     // Menü
     static let menuSettings = "Einstellungen …"
     static let menuPlaceNow = "Vorderstes Finder-Fenster jetzt platzieren"
+    static let menuLog = "Protokoll anzeigen …"
     static let menuCheckUpdate = "Nach Updates suchen …"
     static let menuQuit = "Finestra beenden"
+
+    // Protokoll
+    static let logTitle = "Finestra-Protokoll"
+    static let logRefresh = "Aktualisieren"
+    static let logClear = "Leeren"
+    static let logReveal = "Im Finder zeigen"
+    static let logHint = "Zeigt für jedes neue Finder-Fenster, welchen Monitor und welche Grösse Finestra wählt. Öffne ein Finder-Fenster und schau hier."
+    static let logEmpty = "(noch keine Einträge - öffne ein Finder-Fenster)"
+    static let logButton = "Protokoll anzeigen …"
 
     // Einstellungen - Abschnitte
     static let sectionMonitors = "Monitore"

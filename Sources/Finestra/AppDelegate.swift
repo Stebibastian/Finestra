@@ -20,9 +20,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         promptAccessibility()
         trustedAtLaunch = AXIsProcessTrusted()
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        Log.log("Finestra \(version) gestartet | Bedienungshilfen: \(trustedAtLaunch ? "erteilt" : "NICHT erteilt") | aktiv: \(Settings.enabled) | Modus: \(Settings.targetMode == 0 ? "Folge" : "Fix")")
         if trustedAtLaunch {
             watcher.start()
         } else {
+            Log.log("Watcher startet nicht - warte auf Bedienungshilfen-Freigabe")
             startTrustBackupPolling()
         }
 
@@ -51,6 +54,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                 action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(NSMenuItem(title: Strings.menuPlaceNow,
                                 action: #selector(placeNow), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: Strings.menuLog,
+                                action: #selector(openLog), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: Strings.menuCheckUpdate,
                                 action: #selector(checkForUpdates), keyEquivalent: ""))
         menu.addItem(.separator())
@@ -65,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func configureSettingsWindow() {
         SettingsWindow.shared.onToggleLogin = { [weak self] on in self?.setLogin(on) }
         SettingsWindow.shared.onCheckUpdate = { [weak self] in self?.checkForUpdates() }
+        SettingsWindow.shared.onShowLog = { [weak self] in self?.openLog() }
         SettingsWindow.shared.loginEnabled = { SMAppService.mainApp.status == .enabled }
     }
 
@@ -74,6 +80,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard AXIsProcessTrusted() else { promptAccessibility(); return }
         watcher.placeFrontmost()
     }
+
+    @objc private func openLog() { LogWindow.shared.present() }
 
     private func setLogin(_ on: Bool) {
         do {
