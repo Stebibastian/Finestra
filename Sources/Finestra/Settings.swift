@@ -111,7 +111,7 @@ enum Settings {
     }
 
     private static let perMonitorKey = "perMonitorConfigs"
-    /// Pro Monitor (Schlüssel = CGDirectDisplayID als String) eine eigene Konfiguration.
+    /// Pro Monitor (Schlüssel = stabile Monitor-Kennung) eine eigene Konfiguration.
     static var perMonitorConfigs: [String: Placement] {
         get {
             guard let data = d.data(forKey: perMonitorKey),
@@ -126,15 +126,16 @@ enum Settings {
         }
     }
 
-    /// Konfiguration für einen bestimmten Monitor - eigene, sonst der Standard.
-    static func config(forDisplay id: UInt32) -> Placement {
-        perMonitorConfigs[String(id)] ?? defaultConfig
+    /// Konfiguration für einen bestimmten Monitor (stabiler Schlüssel) - eigene, sonst der Standard.
+    static func config(forKey key: String) -> Placement {
+        perMonitorConfigs[key] ?? defaultConfig
     }
 
-    /// Speichert die Konfiguration für einen bestimmten Monitor.
-    static func setConfig(_ c: Placement, forDisplay id: UInt32) {
+    /// Speichert die Konfiguration für einen bestimmten Monitor (stabiler Schlüssel).
+    static func setConfig(_ c: Placement, forKey key: String) {
+        guard !key.isEmpty else { return }
         var dict = perMonitorConfigs
-        dict[String(id)] = c
+        dict[key] = c
         perMonitorConfigs = dict
     }
 }

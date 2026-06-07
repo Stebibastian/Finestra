@@ -80,8 +80,8 @@ enum WindowPlacer {
         }
 
         // Pro Monitor eigene Konfiguration (Folge-Modus: der Monitor, auf dem das
-        // Fenster aufgeht; Fix-Modus: der gewaehlte Zielmonitor).
-        let rect = Settings.config(forDisplay: target.id).rect(in: target.visibleQuartz)
+        // Fenster aufgeht; Fix-Modus: der gewaehlte Zielmonitor). Stabiler Schlüssel.
+        let rect = Settings.config(forKey: target.stableKey).rect(in: target.visibleQuartz)
         setFrame(window, rect)
     }
 

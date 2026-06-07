@@ -62,14 +62,14 @@ struct SettingsView: View {
             screens = ScreenInfo.all()
             login = loginEnabled()
             focusedID = initialFocus()
-            cfg = Settings.config(forDisplay: focusedID)
+            cfg = Settings.config(forKey: focusedKey)
         }
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.didChangeScreenParametersNotification)) { _ in
             refreshScreens()
         }
-        .onChange(of: focusedID) { id in cfg = Settings.config(forDisplay: id) }
-        .onChange(of: cfg) { c in Settings.setConfig(c, forDisplay: focusedID) }
+        .onChange(of: focusedID) { _ in cfg = Settings.config(forKey: focusedKey) }
+        .onChange(of: cfg) { c in Settings.setConfig(c, forKey: focusedKey) }
         .onChange(of: enabled) { v in Settings.enabled = v }
         .onChange(of: targetMode) { v in Settings.targetMode = v }
         .onChange(of: targetID) { v in Settings.targetDisplayID = v }
@@ -327,6 +327,11 @@ struct SettingsView: View {
         guard let s = ScreenInfo.byID(focusedID, in: screens) else { return "" }
         let h = positionHint(for: s)
         return h.isEmpty ? s.name : h.capitalized
+    }
+
+    /// Stabiler Speicher-Schlüssel des aktuell fokussierten Monitors.
+    private var focusedKey: String {
+        ScreenInfo.byID(focusedID, in: screens)?.stableKey ?? ""
     }
 
     private var mapCaption: String {
