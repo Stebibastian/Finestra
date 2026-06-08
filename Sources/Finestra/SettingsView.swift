@@ -239,6 +239,8 @@ struct MonitorMap: View {
     let previewRect: CGRect?
     let hint: (ScreenInfo) -> String
     let onSelect: (UInt32) -> Void
+    /// true = nicht hervorgehobene Monitore abdunkeln (nicht bearbeitbar, z. B. im Onboarding).
+    var dimOthers: Bool = false
 
     var body: some View {
         GeometryReader { geo in
@@ -266,6 +268,7 @@ struct MonitorMap: View {
     private func cell(for screen: ScreenInfo, layout: MapLayout) -> some View {
         let r = layout.transform(screen.frameQuartz)
         let isFocused = screen.id == highlightID
+        let dimmed = dimOthers && !isFocused
         let lage = hint(screen)
         return RoundedRectangle(cornerRadius: 6)
             .fill(isFocused ? Color.accentColor.opacity(0.14) : Color.gray.opacity(0.10))
@@ -288,8 +291,9 @@ struct MonitorMap: View {
                 .padding(2)
             )
             .frame(width: r.width, height: r.height)
+            .opacity(dimmed ? 0.35 : 1)
             .contentShape(Rectangle())
-            .onTapGesture { onSelect(screen.id) }
+            .onTapGesture { if !dimmed { onSelect(screen.id) } }
             .position(x: r.midX, y: r.midY)
     }
 }

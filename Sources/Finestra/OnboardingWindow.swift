@@ -156,7 +156,8 @@ struct OnboardingView: View {
                        highlightID: currentMonitor?.id,
                        previewRect: previewRect,
                        hint: { ScreenInfo.lageHint($0, in: screens) },
-                       onSelect: { _ in })
+                       onSelect: { _ in },
+                       dimOthers: true)
                 .frame(height: 130)
                 .frame(maxWidth: .infinity)
 
