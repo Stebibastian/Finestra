@@ -13,6 +13,7 @@ final class OnboardingWindow {
             let controller = NSHostingController(rootView: OnboardingView(onFinish: { [weak self] in
                 self?.close()
             }))
+            controller.sizingOptions = [.preferredContentSize]   // Fenster wächst/schrumpft je Schritt
             let win = NSWindow(contentViewController: controller)
             win.title = Strings.appName
             win.styleMask = [.titled]            // kein Schliessen-Knopf → Skip/Fertig nutzen
@@ -57,15 +58,13 @@ struct OnboardingView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                content.padding(28)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            content
+                .padding(28)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             Divider()
             footer.padding(16)
         }
-        .frame(width: 580, height: 600)
+        .frame(width: 600)   // Breite fest, Höhe richtet sich nach dem Inhalt (modular je Schritt)
         .onChange(of: step) { _ in
             if let m = currentMonitor { cfg = Settings.config(forKey: m.stableKey) }
         }
@@ -102,7 +101,7 @@ struct OnboardingView: View {
                 .frame(maxWidth: 420)
             Spacer(minLength: 20)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, minHeight: 340)
     }
 
     private var targetPage: some View {
@@ -122,7 +121,9 @@ struct OnboardingView: View {
                 }
             }
             .padding(.top, 4)
+            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, minHeight: 320, alignment: .topLeading)
     }
 
     private func targetRow(title: String, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -168,6 +169,7 @@ struct OnboardingView: View {
                 PositionEditor(cfg: $cfg).padding(.top, 4)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var donePage: some View {
@@ -184,7 +186,7 @@ struct OnboardingView: View {
                 .frame(maxWidth: 440)
             Spacer(minLength: 20)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, minHeight: 340)
     }
 
     private var previewRect: CGRect? {
