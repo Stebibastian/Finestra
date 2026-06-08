@@ -98,14 +98,30 @@ enum WindowPlacer {
             : "\(Int(cfg.width))×\(Int(cfg.height))px"
         Log.log("\(tag)AX-Pos \(posText) | \(how) | Konfig \(sizeText) | sichtbar \(rectText(target.visibleQuartz)) | setze \(rectText(rect))")
 
-        setFrame(window, rect)
+        // Frisch erstellte Finder-Fenster sind manchmal noch nicht bereit und
+        // „verschlucken" die Groessenaenderung. Darum setzen wir mehrfach nach,
+        // bis der Rahmen wirklich passt (oder geben nach einigen Versuchen auf).
+        enforce(window, rect, tag: tag, attempt: 0)
+    }
 
-        // Nachkontrolle: hat es gegriffen? (Finder verschiebt manchmal nach.)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-            if let after = frame(of: window) {
-                let ok = abs(after.width - rect.width) < 12 && abs(after.height - rect.height) < 12
-                Log.log("\(tag)Ergebnis \(rectText(after))\(ok ? " ✓" : " ⚠ weicht ab - setze erneut")")
-                if !ok { setFrame(window, rect) }   // einmal nachsetzen
+    private static let retryDelays: [Double] = [0.15, 0.3, 0.5, 0.7]
+
+    private static func enforce(_ window: AXUIElement, _ rect: CGRect, tag: String, attempt: Int) {
+        setFrame(window, rect)
+        let delay = retryDelays[min(attempt, retryDelays.count - 1)]
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            guard let after = frame(of: window) else {
+                Log.log("\(tag)Ergebnis nicht lesbar")
+                return
+            }
+            let ok = abs(after.width - rect.width) < 12 && abs(after.height - rect.height) < 12
+            if ok {
+                Log.log("\(tag)Ergebnis \(rectText(after)) ✓\(attempt > 0 ? " (Versuch \(attempt + 1))" : "")")
+            } else if attempt < retryDelays.count - 1 {
+                Log.log("\(tag)Ergebnis \(rectText(after)) ⚠ Versuch \(attempt + 1) zu klein/falsch, wiederhole")
+                enforce(window, rect, tag: tag, attempt: attempt + 1)
+            } else {
+                Log.log("\(tag)Ergebnis \(rectText(after)) ✗ nach \(attempt + 1) Versuchen aufgegeben")
             }
         }
     }

@@ -146,7 +146,7 @@ final class FinderWatcher {
                 continue
             }
             Log.log("Neues Fenster \(id) erkannt")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
                 WindowPlacer.place(window, windowID: id)
             }
         }
