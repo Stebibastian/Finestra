@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        setupMainMenu()
         setupStatusItem()
         configureSettingsWindow()
 
@@ -34,6 +35,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DistributedNotificationCenter.default().addObserver(
             self, selector: #selector(accessibilityChanged),
             name: NSNotification.Name("com.apple.accessibility.api"), object: nil)
+    }
+
+    // MARK: - Hauptmenü (damit Cmd-C/V/X/A/Z in Textfeldern funktionieren)
+
+    /// Eine Menüleisten-App ohne Hauptmenü bekommt kein „Bearbeiten"-Menü - dann
+    /// greifen die Standard-Tastenkürzel in Textfeldern nicht. Wir setzen daher ein
+    /// minimales Hauptmenü (App + Bearbeiten); es erscheint nur, wenn ein Finestra-
+    /// Fenster aktiv ist, und macht Kopieren/Einsetzen/Alles-auswählen verfügbar.
+    private func setupMainMenu() {
+        let mainMenu = NSMenu()
+
+        let appItem = NSMenuItem()
+        mainMenu.addItem(appItem)
+        let appMenu = NSMenu()
+        let settingsItem = appMenu.addItem(withTitle: Strings.menuSettings,
+                                           action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: Strings.menuQuit,
+                        action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appItem.submenu = appMenu
+
+        let editItem = NSMenuItem()
+        mainMenu.addItem(editItem)
+        let editMenu = NSMenu(title: "Bearbeiten")
+        editMenu.addItem(withTitle: "Widerrufen", action: Selector(("undo:")), keyEquivalent: "z")
+        editMenu.addItem(withTitle: "Wiederholen", action: Selector(("redo:")), keyEquivalent: "Z")
+        editMenu.addItem(.separator())
+        editMenu.addItem(withTitle: "Ausschneiden", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Kopieren", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Einsetzen", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Alles auswählen", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editItem.submenu = editMenu
+
+        NSApp.mainMenu = mainMenu
     }
 
     // MARK: - Statusleiste

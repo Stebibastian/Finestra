@@ -1,15 +1,14 @@
 import SwiftUI
 import AppKit
 
-/// Auswahl im Zielmonitor-Picker: Maus-Monitor, Folge-Modus oder ein fester Monitor.
+/// Auswahl im Zielmonitor-Picker: aktiver Monitor (Maus) oder ein fester Monitor.
 enum TargetChoice: Hashable {
     case mouse
-    case follow
     case display(UInt32)
 }
 
-/// Das Einstellungsfenster: Monitore visuell, Zielmonitor, und - pro Monitor -
-/// Grösse, Position und Versatz, jeweils mit Live-Vorschau.
+/// Das Einstellungsfenster. Reihenfolge: Zielmonitor → Grösse → Monitor-Ansicht → Position.
+/// Grösse/Position gelten pro Monitor (der in der Karte gewählte/aktive Monitor).
 struct SettingsView: View {
     let onToggleLogin: (Bool) -> Void
     let onCheckUpdate: () -> Void
@@ -45,22 +44,9 @@ struct SettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             header
-            box(Strings.sectionMonitors) {
-                MonitorMap(screens: screens,
-                           highlightID: focusedID,
-                           previewRect: previewRect,
-                           hint: { positionHint(for: $0) },
-                           onSelect: { setFocus($0) })
-                    .frame(height: 180)
-                    .frame(maxWidth: .infinity)
-                if !mapCaption.isEmpty {
-                    Text(mapCaption)
-                        .font(.caption).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
             box(Strings.sectionTarget) { targetControls }
             box(boxTitle(Strings.sectionSize)) { sizeControls }
+            box(Strings.sectionMonitors) { mapControls }
             box(boxTitle(Strings.sectionPosition)) { positionControls }
             box(Strings.sectionGeneral) { generalControls }
         }
@@ -102,22 +88,14 @@ struct SettingsView: View {
     private var targetControls: some View {
         VStack(alignment: .leading, spacing: 6) {
             Picker("", selection: Binding<TargetChoice>(
-                get: {
-                    switch targetMode {
-                    case 1: return .display(targetID)
-                    case 0: return .follow
-                    default: return .mouse
-                    }
-                },
+                get: { targetMode == 1 ? .display(targetID) : .mouse },
                 set: { choice in
                     switch choice {
                     case .mouse: targetMode = 2
-                    case .follow: targetMode = 0
                     case .display(let id): targetMode = 1; targetID = id; focusedID = id
                     }
                 })) {
                 Text(Strings.targetMouse).tag(TargetChoice.mouse)
-                Text(Strings.targetFollow).tag(TargetChoice.follow)
                 ForEach(screens) { s in
                     Text(hintedName(for: s)).tag(TargetChoice.display(s.id))
                 }
@@ -125,17 +103,9 @@ struct SettingsView: View {
             .labelsHidden()
             .pickerStyle(.menu)
 
-            Text(targetHint)
+            Text(targetMode == 1 ? Strings.targetFixedHint : Strings.targetMouseHint)
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private var targetHint: String {
-        switch targetMode {
-        case 1: return Strings.targetFixedHint
-        case 0: return Strings.targetFollowHint
-        default: return Strings.targetMouseHint
         }
     }
 
@@ -168,19 +138,6 @@ struct SettingsView: View {
 
     private var sizeControls: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if targetMode != 1 && screens.count > 1 {
-                HStack(spacing: 8) {
-                    Text(Strings.editMonitor).frame(width: 54, alignment: .leading)
-                    Picker("", selection: Binding<UInt32>(
-                        get: { focusedID }, set: { focusedID = $0 })) {
-                        ForEach(screens) { s in Text(hintedName(for: s)).tag(s.id) }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                }
-                Divider()
-            }
-
             Picker("", selection: $cfg.sizeMode) {
                 Text(Strings.sizeFixed).tag(0)
                 Text(Strings.sizePercent).tag(1)
@@ -231,6 +188,25 @@ struct SettingsView: View {
                 .frame(width: 46, alignment: .trailing)
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Monitor-Ansicht (Vorschau + Auswahl des zu bearbeitenden Monitors)
+
+    private var mapControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            MonitorMap(screens: screens,
+                       highlightID: focusedID,
+                       previewRect: previewRect,
+                       hint: { positionHint(for: $0) },
+                       onSelect: { setFocus($0) })
+                .frame(height: 170)
+                .frame(maxWidth: .infinity)
+            if !mapCaption.isEmpty {
+                Text(mapCaption)
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

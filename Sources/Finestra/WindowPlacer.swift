@@ -75,15 +75,10 @@ enum WindowPlacer {
            let chosen = ScreenInfo.byID(Settings.targetDisplayID, in: screens) {
             target = chosen
             how = "Fix → \(chosen.name)"
-        } else if Settings.targetMode == 2,
-                  let mouse = ScreenInfo.screenUnderMouse(in: screens) {
+        } else if let mouse = ScreenInfo.screenUnderMouse(in: screens) {
+            // Standard: aktiver Monitor (wo der Mauszeiger ist).
             target = mouse
             how = "Maus → \(mouse.name)"
-        } else if Settings.targetMode == 0,
-                  let p = pos,
-                  let here = ScreenInfo.containing(point: p, in: screens) {
-            target = here
-            how = "Folge → \(here.name)"
         } else {
             target = ScreenInfo.main(in: screens) ?? screens[0]
             how = "Rueckfall Haupt (\(target.name))"
