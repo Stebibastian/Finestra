@@ -22,7 +22,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         promptAccessibility()
         trustedAtLaunch = AXIsProcessTrusted()
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
-        Log.log("Finestra \(version) gestartet | Bedienungshilfen: \(trustedAtLaunch ? "erteilt" : "NICHT erteilt") | aktiv: \(Settings.enabled) | Modus: \(Settings.targetMode == 0 ? "Folge" : "Fix")")
+        let modeLabel = Settings.targetMode == 1 ? "Fester Monitor" : "Maus"
+        Log.log("Finestra \(version) gestartet | Bedienungshilfen: \(trustedAtLaunch ? "erteilt" : "NICHT erteilt") | aktiv: \(Settings.enabled) | Modus: \(modeLabel)")
         if trustedAtLaunch {
             watcher.start()
         } else {
