@@ -66,6 +66,17 @@ struct ScreenInfo: Identifiable {
         list.first { $0.isMain } ?? list.first
     }
 
+    /// Der Monitor, auf dem sich gerade der Mauszeiger befindet.
+    static func screenUnderMouse(in list: [ScreenInfo]) -> ScreenInfo? {
+        guard !list.isEmpty else { return nil }
+        let screens = NSScreen.screens
+        let zero = screens.first(where: { $0.frame.origin == .zero }) ?? screens.first
+        let flipBase = zero?.frame.maxY ?? 0
+        let m = NSEvent.mouseLocation                       // AppKit (unten-links)
+        let point = CGPoint(x: m.x, y: flipBase - m.y)       // → Quartz (oben-links)
+        return containing(point: point, in: list) ?? main(in: list)
+    }
+
     static func byID(_ id: UInt32, in list: [ScreenInfo]) -> ScreenInfo? {
         list.first { $0.id == id }
     }

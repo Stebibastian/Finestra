@@ -34,14 +34,15 @@ enum Strings {
     static let enabledHint = "Neue Finder-Fenster werden beim Öffnen platziert."
 
     // Zielmonitor
+    static let targetMouse = "Aktiver Monitor (wo die Maus ist)"
+    static let targetMouseHint = "Neue Fenster gehen auf dem Monitor auf, auf dem gerade der Mauszeiger ist."
     static let targetFollow = "Wo das Fenster aufgeht (Folge-Modus)"
-    static let targetFollowHint = "Das Fenster bleibt auf dem Monitor, auf dem es geöffnet wurde - nur Grösse und Position werden gesetzt."
+    static let targetFollowHint = "Das Fenster bleibt auf dem Monitor, auf dem der Finder es öffnet - nur Grösse und Position werden gesetzt."
     static let targetFixedHint = "Neue Fenster werden immer auf den gewählten Monitor verschoben."
-    static let targetMapHint = "Tipp: In der Karte oben direkt auf einen Monitor klicken, um ihn als Ziel zu wählen."
     static let targetMain = "Hauptmonitor"
 
     static let mapHintFixed = "Klick auf einen Monitor in der Karte wählt den Zielmonitor."
-    static let mapHintFollow = "Klick wählt den Monitor, dessen Werte Du unten einstellst - im Folge-Modus hat jeder Monitor eigene Grösse und Position."
+    static let mapHintEdit = "Klick wählt den Monitor, dessen Grösse und Position Du unten einstellst. Jeder Monitor hat eigene Werte."
     static let editMonitor = "Monitor"
 
     // Grösse

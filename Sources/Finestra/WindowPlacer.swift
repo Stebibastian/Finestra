@@ -75,6 +75,10 @@ enum WindowPlacer {
            let chosen = ScreenInfo.byID(Settings.targetDisplayID, in: screens) {
             target = chosen
             how = "Fix → \(chosen.name)"
+        } else if Settings.targetMode == 2,
+                  let mouse = ScreenInfo.screenUnderMouse(in: screens) {
+            target = mouse
+            how = "Maus → \(mouse.name)"
         } else if Settings.targetMode == 0,
                   let p = pos,
                   let here = ScreenInfo.containing(point: p, in: screens) {
@@ -82,9 +86,7 @@ enum WindowPlacer {
             how = "Folge → \(here.name)"
         } else {
             target = ScreenInfo.main(in: screens) ?? screens[0]
-            how = Settings.targetMode == 0
-                ? "Folge → Rueckfall Haupt (\(target.name)); AX-Position lag auf keinem Monitor"
-                : "Fix → Rueckfall Haupt (\(target.name)); Zielmonitor nicht angeschlossen"
+            how = "Rueckfall Haupt (\(target.name))"
         }
 
         // Pro Monitor eigene Konfiguration (Folge-Modus: der Monitor, auf dem das

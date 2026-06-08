@@ -12,9 +12,10 @@ enum Settings {
     }
 
     private static let targetModeKey = "targetMode"
-    /// 0 = auf dem Monitor lassen, auf dem es aufgeht; 1 = fester Zielmonitor.
+    /// 0 = auf dem Monitor lassen, auf dem es aufgeht (Folge);
+    /// 1 = fester Zielmonitor; 2 = aktiver Monitor (wo der Mauszeiger ist). Standard: 2.
     static var targetMode: Int {
-        get { d.object(forKey: targetModeKey) as? Int ?? 0 }
+        get { d.object(forKey: targetModeKey) as? Int ?? 2 }
         set { d.set(newValue, forKey: targetModeKey) }
     }
 

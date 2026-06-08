@@ -1,6 +1,13 @@
 import SwiftUI
 import AppKit
 
+/// Auswahl im Zielmonitor-Picker: Maus-Monitor, Folge-Modus oder ein fester Monitor.
+enum TargetChoice: Hashable {
+    case mouse
+    case follow
+    case display(UInt32)
+}
+
 /// Das Einstellungsfenster: Monitore visuell, Zielmonitor, und - pro Monitor -
 /// Grösse, Position und Versatz, jeweils mit Live-Vorschau.
 struct SettingsView: View {
@@ -94,23 +101,41 @@ struct SettingsView: View {
 
     private var targetControls: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Picker("", selection: Binding<UInt32>(
-                get: { targetMode == 0 ? 0 : targetID },
-                set: { v in
-                    if v == 0 { targetMode = 0 }
-                    else { targetMode = 1; targetID = v; focusedID = v }
+            Picker("", selection: Binding<TargetChoice>(
+                get: {
+                    switch targetMode {
+                    case 1: return .display(targetID)
+                    case 0: return .follow
+                    default: return .mouse
+                    }
+                },
+                set: { choice in
+                    switch choice {
+                    case .mouse: targetMode = 2
+                    case .follow: targetMode = 0
+                    case .display(let id): targetMode = 1; targetID = id; focusedID = id
+                    }
                 })) {
-                Text(Strings.targetFollow).tag(UInt32(0))
+                Text(Strings.targetMouse).tag(TargetChoice.mouse)
+                Text(Strings.targetFollow).tag(TargetChoice.follow)
                 ForEach(screens) { s in
-                    Text(hintedName(for: s)).tag(s.id)
+                    Text(hintedName(for: s)).tag(TargetChoice.display(s.id))
                 }
             }
             .labelsHidden()
             .pickerStyle(.menu)
 
-            Text(targetMode == 0 ? Strings.targetFollowHint : Strings.targetFixedHint)
+            Text(targetHint)
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var targetHint: String {
+        switch targetMode {
+        case 1: return Strings.targetFixedHint
+        case 0: return Strings.targetFollowHint
+        default: return Strings.targetMouseHint
         }
     }
 
@@ -143,7 +168,7 @@ struct SettingsView: View {
 
     private var sizeControls: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if targetMode == 0 && screens.count > 1 {
+            if targetMode != 1 && screens.count > 1 {
                 HStack(spacing: 8) {
                     Text(Strings.editMonitor).frame(width: 54, alignment: .leading)
                     Picker("", selection: Binding<UInt32>(
@@ -342,7 +367,7 @@ struct SettingsView: View {
 
     private var mapCaption: String {
         guard screens.count > 1 else { return "" }
-        return targetMode == 1 ? Strings.mapHintFixed : Strings.mapHintFollow
+        return targetMode == 1 ? Strings.mapHintFixed : Strings.mapHintEdit
     }
 
     private func initialFocus() -> UInt32 {
