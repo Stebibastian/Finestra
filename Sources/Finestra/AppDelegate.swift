@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var trustedAtLaunch = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Strings.lang = Settings.resolvedLanguage   // Sprache VOR dem ersten Text-/Menüaufbau setzen
         NSApp.setActivationPolicy(.accessory)
         setupMainMenu()
         setupStatusItem()
@@ -26,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Log.log("Finestra \(version) gestartet | Bedienungshilfen: \(trustedAtLaunch ? "erteilt" : "NICHT erteilt") | aktiv: \(Settings.enabled) | Modus: \(modeLabel)")
         if trustedAtLaunch {
             watcher.start()
+            maybeShowOnboarding()
         } else {
             Log.log("Watcher startet nicht - warte auf Bedienungshilfen-Freigabe")
             startTrustBackupPolling()
@@ -108,6 +110,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         SettingsWindow.shared.onToggleLogin = { [weak self] on in self?.setLogin(on) }
         SettingsWindow.shared.onCheckUpdate = { [weak self] in self?.checkForUpdates() }
         SettingsWindow.shared.onShowLog = { [weak self] in self?.openLog() }
+        SettingsWindow.shared.onLanguageChange = { [weak self] lang in
+            Settings.appLanguage = lang
+            self?.relaunchSelf()   // Neustart, damit Menü und alle Texte in der neuen Sprache neu aufgebaut werden
+        }
         SettingsWindow.shared.loginEnabled = { SMAppService.mainApp.status == .enabled }
     }
 
@@ -119,6 +125,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openLog() { LogWindow.shared.present() }
+
+    /// Beim ersten Start (noch nicht abgeschlossen) den Einrichtungs-Assistenten zeigen.
+    private func maybeShowOnboarding() {
+        guard !Settings.onboardingDone else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            OnboardingWindow.shared.present()
+        }
+    }
 
     private func setLogin(_ on: Bool) {
         do {

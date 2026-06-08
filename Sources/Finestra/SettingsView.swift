@@ -8,11 +8,11 @@ enum TargetChoice: Hashable {
 }
 
 /// Das Einstellungsfenster. Reihenfolge: Zielmonitor → Grösse → Monitor-Ansicht → Position.
-/// Grösse/Position gelten pro Monitor (der in der Karte gewählte/aktive Monitor).
 struct SettingsView: View {
     let onToggleLogin: (Bool) -> Void
     let onCheckUpdate: () -> Void
     let onShowLog: () -> Void
+    let onLanguageChange: (String) -> Void
     let loginEnabled: () -> Bool
 
     @State private var enabled = Settings.enabled
@@ -23,31 +23,13 @@ struct SettingsView: View {
     @State private var login = false
     @State private var screens: [ScreenInfo] = ScreenInfo.all()
 
-    private static let intFormatter: NumberFormatter = {
-        let f = NumberFormatter()
-        f.numberStyle = .none
-        f.maximumFractionDigits = 0
-        f.minimum = 300
-        f.maximum = 6000
-        return f
-    }()
-
-    private static let signedFormatter: NumberFormatter = {
-        let f = NumberFormatter()
-        f.numberStyle = .none
-        f.maximumFractionDigits = 0
-        f.minimum = -3000
-        f.maximum = 3000
-        return f
-    }()
-
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             header
             box(Strings.sectionTarget) { targetControls }
-            box(boxTitle(Strings.sectionSize)) { sizeControls }
+            box(boxTitle(Strings.sectionSize)) { SizeEditor(cfg: $cfg) }
             box(Strings.sectionMonitors) { mapControls }
-            box(boxTitle(Strings.sectionPosition)) { positionControls }
+            box(boxTitle(Strings.sectionPosition)) { PositionEditor(cfg: $cfg) }
             box(Strings.sectionGeneral) { generalControls }
         }
         .padding(20)
@@ -78,8 +60,7 @@ struct SettingsView: View {
                 Text(Strings.tagline).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            Toggle(Strings.enabledLabel, isOn: $enabled)
-                .toggleStyle(.switch)
+            Toggle(Strings.enabledLabel, isOn: $enabled).toggleStyle(.switch)
         }
     }
 
@@ -109,88 +90,6 @@ struct SettingsView: View {
         }
     }
 
-    /// Monitorname samt Lage-Hinweis (links/rechts/…) und „Haupt", da gleiche Modelle gleich heissen.
-    private func hintedName(for s: ScreenInfo) -> String {
-        var parts: [String] = []
-        let hint = positionHint(for: s)
-        if !hint.isEmpty { parts.append(hint) }
-        if s.isMain { parts.append("Haupt") }
-        return parts.isEmpty ? s.name : "\(s.name) - \(parts.joined(separator: ", "))"
-    }
-
-    /// Lage eines Monitors relativ zu den anderen: links/rechts bzw. oben/unten.
-    private func positionHint(for s: ScreenInfo) -> String {
-        guard screens.count > 1 else { return "" }
-        let xs = Set(screens.map { Int($0.frameQuartz.minX.rounded()) })
-        if xs.count == screens.count {
-            let sorted = screens.sorted { $0.frameQuartz.minX < $1.frameQuartz.minX }
-            if s.id == sorted.first?.id { return "links" }
-            if s.id == sorted.last?.id { return "rechts" }
-            return "Mitte"
-        }
-        let sorted = screens.sorted { $0.frameQuartz.minY < $1.frameQuartz.minY }
-        if s.id == sorted.first?.id { return "oben" }
-        if s.id == sorted.last?.id { return "unten" }
-        return ""
-    }
-
-    // MARK: - Grösse (pro fokussiertem Monitor)
-
-    private var sizeControls: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Picker("", selection: $cfg.sizeMode) {
-                Text(Strings.sizeFixed).tag(0)
-                Text(Strings.sizePercent).tag(1)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-
-            if cfg.sizeMode == 0 {
-                HStack(spacing: 6) {
-                    ForEach(SizePreset.all, id: \.label) { preset in
-                        Button(preset.label) {
-                            cfg.width = preset.w
-                            cfg.height = preset.h
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .tint(cfg.width == preset.w && cfg.height == preset.h ? .accentColor : nil)
-                    }
-                }
-                HStack(spacing: 16) {
-                    pixelField(Strings.sizeWidth, $cfg.width)
-                    pixelField(Strings.sizeHeight, $cfg.height)
-                }
-            } else {
-                percentRow(Strings.sizeWidth, $cfg.percentW)
-                percentRow(Strings.sizeHeight, $cfg.percentH)
-            }
-        }
-    }
-
-    private func pixelField(_ label: String, _ value: Binding<Double>) -> some View {
-        HStack(spacing: 6) {
-            Text(label).frame(width: 54, alignment: .leading)
-            TextField("", value: value, formatter: Self.intFormatter)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 70)
-            Stepper("", value: value, in: 300...6000, step: 20)
-                .labelsHidden()
-            Text("px").foregroundStyle(.secondary)
-        }
-    }
-
-    private func percentRow(_ label: String, _ value: Binding<Double>) -> some View {
-        HStack(spacing: 10) {
-            Text(label).frame(width: 54, alignment: .leading)
-            Slider(value: value, in: 0.2...1.0)
-            Text("\(Int((value.wrappedValue * 100).rounded())) %")
-                .frame(width: 46, alignment: .trailing)
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-        }
-    }
-
     // MARK: - Monitor-Ansicht (Vorschau + Auswahl des zu bearbeitenden Monitors)
 
     private var mapControls: some View {
@@ -210,85 +109,6 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Position (pro fokussiertem Monitor)
-
-    private var positionControls: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 16) {
-                VStack(spacing: 5) {
-                    ForEach(0..<3, id: \.self) { row in
-                        HStack(spacing: 5) {
-                            ForEach(0..<3, id: \.self) { col in
-                                positionCell(index: row * 3 + col)
-                            }
-                        }
-                    }
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(Strings.positionNames[cfg.position.rawValue])
-                        .font(.callout.weight(.medium))
-                    Text(sizeSummary)
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-            }
-            Divider()
-            offsetControls
-        }
-    }
-
-    private var offsetControls: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 14) {
-                Text(Strings.offsetLabel).frame(width: 54, alignment: .leading)
-                offsetField("X", $cfg.offsetX)
-                offsetField("Y", $cfg.offsetY)
-                Button(Strings.offsetReset) { cfg.offsetX = 0; cfg.offsetY = 0 }
-                    .controlSize(.small)
-                    .disabled(cfg.offsetX == 0 && cfg.offsetY == 0)
-            }
-            Text(Strings.offsetHint).font(.caption).foregroundStyle(.secondary)
-        }
-    }
-
-    private func offsetField(_ label: String, _ value: Binding<Double>) -> some View {
-        HStack(spacing: 5) {
-            Text(label).foregroundStyle(.secondary)
-            TextField("", value: value, formatter: Self.signedFormatter)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 62)
-            Stepper("", value: value, in: -3000...3000, step: 10)
-                .labelsHidden()
-        }
-    }
-
-    private func positionCell(index: Int) -> some View {
-        let selected = cfg.position.rawValue == index
-        let col = index % 3
-        let row = index / 3
-        let align = Alignment(
-            horizontal: col == 0 ? .leading : (col == 2 ? .trailing : .center),
-            vertical: row == 0 ? .top : (row == 2 ? .bottom : .center))
-        return Button {
-            cfg.position = WindowPosition(rawValue: index) ?? .center
-        } label: {
-            RoundedRectangle(cornerRadius: 5)
-                .fill(selected ? Color.accentColor.opacity(0.18) : Color.gray.opacity(0.12))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 5)
-                        .strokeBorder(selected ? Color.accentColor : Color.gray.opacity(0.4),
-                                      lineWidth: selected ? 1.5 : 1))
-                .overlay(alignment: align) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(selected ? Color.accentColor : Color.gray.opacity(0.55))
-                        .frame(width: 18, height: 12)
-                        .padding(4)
-                }
-                .frame(width: 46, height: 32)
-        }
-        .buttonStyle(.plain)
-    }
-
     // MARK: - Allgemein
 
     private var generalControls: some View {
@@ -297,18 +117,32 @@ struct SettingsView: View {
                 get: { login },
                 set: { v in login = v; onToggleLogin(v) }))
                 .toggleStyle(.switch)
+            HStack {
+                Text(Strings.language)
+                Spacer()
+                Picker("", selection: Binding<String>(
+                    get: { Settings.appLanguage },
+                    set: { onLanguageChange($0) })) {
+                    Text(Strings.languageSystem).tag("system")
+                    Text("Deutsch").tag("de")
+                    Text("English").tag("en")
+                    Text("Français").tag("fr")
+                    Text("Español").tag("es")
+                    Text("Italiano").tag("it")
+                }
+                .labelsHidden()
+                .frame(width: 170)
+            }
             Divider()
             HStack {
-                Button(Strings.logButton) { onShowLog() }
-                    .controlSize(.small)
+                Button(Strings.logButton) { onShowLog() }.controlSize(.small)
                 Spacer()
             }
             HStack {
                 Text("\(Strings.version) \(UpdateChecker.currentVersion)")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Button(Strings.checkUpdate) { onCheckUpdate() }
-                    .controlSize(.small)
+                Button(Strings.checkUpdate) { onCheckUpdate() }.controlSize(.small)
             }
         }
     }
@@ -324,7 +158,31 @@ struct SettingsView: View {
         }
     }
 
-    /// Box-Titel mit fokussiertem Monitor, falls mehrere angeschlossen sind.
+    /// Monitorname samt Lage-Hinweis (links/rechts/…) und „Haupt".
+    private func hintedName(for s: ScreenInfo) -> String {
+        var parts: [String] = []
+        let hint = positionHint(for: s)
+        if !hint.isEmpty { parts.append(hint) }
+        if s.isMain { parts.append(Strings.hintMain) }
+        return parts.isEmpty ? s.name : "\(s.name) - \(parts.joined(separator: ", "))"
+    }
+
+    /// Lage eines Monitors relativ zu den anderen: links/rechts bzw. oben/unten.
+    private func positionHint(for s: ScreenInfo) -> String {
+        guard screens.count > 1 else { return "" }
+        let xs = Set(screens.map { Int($0.frameQuartz.minX.rounded()) })
+        if xs.count == screens.count {
+            let sorted = screens.sorted { $0.frameQuartz.minX < $1.frameQuartz.minX }
+            if s.id == sorted.first?.id { return Strings.hintLeft }
+            if s.id == sorted.last?.id { return Strings.hintRight }
+            return Strings.hintCenter
+        }
+        let sorted = screens.sorted { $0.frameQuartz.minY < $1.frameQuartz.minY }
+        if s.id == sorted.first?.id { return Strings.hintTop }
+        if s.id == sorted.last?.id { return Strings.hintBottom }
+        return ""
+    }
+
     private func boxTitle(_ base: String) -> String {
         guard screens.count > 1, !focusedLabel.isEmpty else { return base }
         return "\(base) · \(focusedLabel)"
@@ -336,7 +194,6 @@ struct SettingsView: View {
         return h.isEmpty ? s.name : h.capitalized
     }
 
-    /// Stabiler Speicher-Schlüssel des aktuell fokussierten Monitors.
     private var focusedKey: String {
         ScreenInfo.byID(focusedID, in: screens)?.stableKey ?? ""
     }
@@ -372,14 +229,6 @@ struct SettingsView: View {
         guard let s = previewScreen else { return nil }
         return cfg.rect(in: s.visibleQuartz)
     }
-
-    private var sizeSummary: String {
-        if cfg.sizeMode == 0 {
-            return "\(Int(cfg.width)) × \(Int(cfg.height)) px"
-        } else {
-            return "\(Int((cfg.percentW * 100).rounded())) % × \(Int((cfg.percentH * 100).rounded())) %"
-        }
-    }
 }
 
 /// Zeichnet die angeschlossenen Monitore massstabsgetreu samt Vorschau-Fenster.
@@ -407,7 +256,7 @@ struct MonitorMap: View {
                         .frame(width: max(r.width, 6), height: max(r.height, 6))
                         .position(x: r.midX, y: r.midY)
                         .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
-                        .allowsHitTesting(false)   // Klicks gehen an den Monitor darunter
+                        .allowsHitTesting(false)
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
@@ -433,7 +282,7 @@ struct MonitorMap: View {
                         .font(.system(size: 9))
                         .foregroundStyle(.secondary)
                     if screen.isMain {
-                        Text("Haupt").font(.system(size: 8)).foregroundStyle(.secondary)
+                        Text(Strings.hintMain).font(.system(size: 8)).foregroundStyle(.secondary)
                     }
                 }
                 .padding(2)
@@ -459,11 +308,11 @@ struct MapLayout {
         }
         let availW = max(area.width - pad * 2, 1)
         let availH = max(area.height - pad * 2, 1)
-        let s = min(availW / union.width, availH / union.height)
-        scale = s
+        let scl = min(availW / union.width, availH / union.height)
+        scale = scl
         bbox = union
-        offset = CGSize(width: (area.width - union.width * s) / 2,
-                        height: (area.height - union.height * s) / 2)
+        offset = CGSize(width: (area.width - union.width * scl) / 2,
+                        height: (area.height - union.height * scl) / 2)
     }
 
     func transform(_ r: CGRect) -> CGRect {

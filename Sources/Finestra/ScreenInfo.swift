@@ -80,4 +80,29 @@ struct ScreenInfo: Identifiable {
     static func byID(_ id: UInt32, in list: [ScreenInfo]) -> ScreenInfo? {
         list.first { $0.id == id }
     }
+
+    /// Lokalisierter Lage-Hinweis (links/rechts bzw. oben/unten/Mitte) relativ zu den anderen.
+    static func lageHint(_ s: ScreenInfo, in list: [ScreenInfo]) -> String {
+        guard list.count > 1 else { return "" }
+        let xs = Set(list.map { Int($0.frameQuartz.minX.rounded()) })
+        if xs.count == list.count {
+            let sorted = list.sorted { $0.frameQuartz.minX < $1.frameQuartz.minX }
+            if s.id == sorted.first?.id { return Strings.hintLeft }
+            if s.id == sorted.last?.id { return Strings.hintRight }
+            return Strings.hintCenter
+        }
+        let sorted = list.sorted { $0.frameQuartz.minY < $1.frameQuartz.minY }
+        if s.id == sorted.first?.id { return Strings.hintTop }
+        if s.id == sorted.last?.id { return Strings.hintBottom }
+        return ""
+    }
+
+    /// Anzeigename mit Lage-Hinweis und „Haupt" (da gleiche Modelle gleich heissen).
+    static func displayName(_ s: ScreenInfo, in list: [ScreenInfo]) -> String {
+        var parts: [String] = []
+        let h = lageHint(s, in: list)
+        if !h.isEmpty { parts.append(h) }
+        if s.isMain { parts.append(Strings.hintMain) }
+        return parts.isEmpty ? s.name : "\(s.name) - \(parts.joined(separator: ", "))"
+    }
 }

@@ -89,6 +89,33 @@ enum Settings {
         set { d.set(newValue, forKey: moveDeclinedKey) }
     }
 
+    private static let onboardingDoneKey = "onboardingDone"
+    /// Wurde der Einrichtungs-Assistent schon abgeschlossen?
+    static var onboardingDone: Bool {
+        get { d.bool(forKey: onboardingDoneKey) }
+        set { d.set(newValue, forKey: onboardingDoneKey) }
+    }
+
+    /// Unterstützte Oberflächensprachen.
+    static let supportedLanguages = ["de", "en", "fr", "es", "it"]
+
+    private static let appLanguageKey = "appLanguage"
+    /// Sprache der Oberfläche: "system" (Standard) oder ein Code aus `supportedLanguages`.
+    static var appLanguage: String {
+        get { d.string(forKey: appLanguageKey) ?? "system" }
+        set { d.set(newValue, forKey: appLanguageKey) }
+    }
+
+    /// Tatsächlich genutzte Sprache, aus Einstellung + System-Sprachreihenfolge abgeleitet.
+    static var resolvedLanguage: String {
+        if supportedLanguages.contains(appLanguage) { return appLanguage }
+        for code in Locale.preferredLanguages {
+            let base = String(code.prefix(2))
+            if supportedLanguages.contains(base) { return base }
+        }
+        return "en"
+    }
+
     /// Standard-/Rückfall-Konfiguration (aus den Einzelwerten oben). Dient als Vorlage
     /// für Monitore, die noch keine eigene Konfiguration haben.
     static var defaultConfig: Placement {
