@@ -24,9 +24,10 @@ struct UpdateView: View {
     }
 
     /// Notes ohne Installations-/Signatur-Zeilen; Überschriften fett, „- " als „• ",
-    /// inline-Markdown (**fett** usw.) gerendert.
+    /// inline-Markdown (**fett** usw.) gerendert. Sehr lange Notes werden gekappt,
+    /// damit der Dialog nicht riesig wird (Rest auf der Release-Seite).
     private var items: [AttributedString] {
-        notes.split(separator: "\n").map(String.init).compactMap { raw -> AttributedString? in
+        let all: [AttributedString] = notes.split(separator: "\n").map(String.init).compactMap { raw in
             let t = raw.trimmingCharacters(in: .whitespaces)
             let l = t.lowercased()
             if t.isEmpty || t == "```" || l.contains("install") || l.contains("curl ")
@@ -44,6 +45,9 @@ struct UpdateView: View {
             }
             return Self.inline(t)
         }
+        let maxLines = 16
+        guard all.count > maxLines else { return all }
+        return Array(all.prefix(maxLines)) + [AttributedString("…")]
     }
 
     /// Parst inline-Markdown (Fett/Kursiv/Code) und behält Leerzeichen.
