@@ -117,6 +117,10 @@ struct SettingsView: View {
                 get: { login },
                 set: { v in login = v; onToggleLogin(v) }))
                 .toggleStyle(.switch)
+            Toggle(Strings.autoUpdate, isOn: Binding(
+                get: { Settings.autoUpdate },
+                set: { Settings.autoUpdate = $0 }))
+                .toggleStyle(.switch)
             HStack {
                 Text(Strings.language)
                 Spacer()

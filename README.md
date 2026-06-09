@@ -1,5 +1,7 @@
 # Finestra
 
+[![Download the latest release](https://img.shields.io/github/v/release/Stebibastian/Finestra?label=Download&color=orange&style=for-the-badge)](https://github.com/Stebibastian/Finestra/releases/latest/download/Finestra.zip)
+
 A tiny macOS menu-bar app that **automatically places new Finder windows** at the size,
 position and monitor you choose. Open a Finder window - it lands exactly where you want it.
 

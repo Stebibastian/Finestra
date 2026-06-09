@@ -234,7 +234,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         UserDefaults.standard.set(now, forKey: "lastUpdateCheck")
         UpdateChecker.check { [weak self] result in
             guard case .success(let info?) = result else { return }
-            self?.showUpdateAlert(info)
+            if Settings.autoUpdate {
+                self?.runUpdate()              // still im Hintergrund installieren
+            } else {
+                self?.showUpdateAlert(info)
+            }
         }
     }
 
@@ -255,8 +259,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showUpdateAlert(_ info: UpdateInfo) {
         let alert = NSAlert()
         alert.messageText = Strings.updateTitle(info.version)
-        let notes = info.notes.count > 600 ? String(info.notes.prefix(600)) + " …" : info.notes
-        alert.informativeText = notes.isEmpty ? " " : notes
+        let host = NSHostingView(rootView: UpdateView(notes: info.notes))
+        host.frame.size = host.fittingSize
+        alert.accessoryView = host
         alert.addButton(withTitle: Strings.updateInstall)
         alert.addButton(withTitle: Strings.updatePage)
         alert.addButton(withTitle: Strings.updateLater)
@@ -269,14 +274,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Kleines Fenster mit laufendem Balken, sichtbar bis das Skript die App neu startet.
+    private var updateProgressWindow: NSWindow?
+    private func showUpdateProgress() {
+        let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 320, height: 130),
+                           styleMask: [.titled], backing: .buffered, defer: false)
+        win.titleVisibility = .hidden
+        win.titlebarAppearsTransparent = true
+        win.level = .floating
+        win.isReleasedWhenClosed = false
+        win.contentView = NSHostingView(rootView: UpdateProgressView())
+        win.center()
+        NSApp.activate(ignoringOtherApps: true)
+        win.makeKeyAndOrderFront(nil)
+        updateProgressWindow = win
+    }
+
     /// Laedt + installiert die neueste notarisierte Version (web-install.sh) und startet neu.
     /// Losgeloest gestartet (nohup + &), damit es den pkill der App ueberlebt.
     private func runUpdate() {
+        showUpdateProgress()
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/bash")
         task.arguments = ["-c",
             "nohup /bin/bash -c '\(UpdateChecker.installCommand)' >/tmp/finestra-update.log 2>&1 &"]
-        try? task.run()
+        do {
+            try task.run()
+        } catch {
+            updateProgressWindow?.orderOut(nil)
+            infoAlert(Strings.appName, Strings.updateFailBody)
+        }
     }
 
     private func infoAlert(_ title: String, _ body: String) {

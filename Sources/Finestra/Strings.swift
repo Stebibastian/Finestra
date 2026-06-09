@@ -187,6 +187,21 @@ enum Strings {
         "No se pudo determinar la última versión. Inténtalo de nuevo más tarde.",
         "Impossibile determinare l'ultima versione. Riprova più tardi.") }
     static var updateInstalling: String { s("Aktualisierung läuft …", "Updating …", "Mise à jour …", "Actualizando …", "Aggiornamento …") }
+    static var updateRelaunchHint: String { s(
+        "Finestra wird heruntergeladen und startet sich neu.",
+        "Finestra is downloading and will relaunch.",
+        "Finestra se télécharge et redémarre.",
+        "Finestra se está descargando y se reiniciará.",
+        "Finestra si sta scaricando e si riavvierà.") }
+    static var updateAvailableLabel: String { s("Neuerungen:", "What's new:", "Nouveautés :", "Novedades:", "Novità:") }
+    static var updateBody: String { s(
+        "Eine neue Version ist verfügbar.", "A new version is available.",
+        "Une nouvelle version est disponible.", "Hay una nueva versión disponible.",
+        "È disponibile una nuova versione.") }
+    static var autoUpdate: String { s(
+        "Updates automatisch installieren", "Install updates automatically",
+        "Installer les mises à jour automatiquement", "Instalar actualizaciones automáticamente",
+        "Installa gli aggiornamenti automaticamente") }
 
     // MARK: Onboarding
     static var obWelcomeTitle: String { s("Willkommen bei Finestra", "Welcome to Finestra", "Bienvenue dans Finestra", "Te damos la bienvenida a Finestra", "Benvenuto in Finestra") }

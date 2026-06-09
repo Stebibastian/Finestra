@@ -96,6 +96,13 @@ enum Settings {
         set { d.set(newValue, forKey: onboardingDoneKey) }
     }
 
+    private static let autoUpdateKey = "autoUpdate"
+    /// Neue Versionen automatisch im Hintergrund installieren (statt nur zu melden). Standard: aus.
+    static var autoUpdate: Bool {
+        get { d.bool(forKey: autoUpdateKey) }
+        set { d.set(newValue, forKey: autoUpdateKey) }
+    }
+
     /// Unterstützte Oberflächensprachen.
     static let supportedLanguages = ["de", "en", "fr", "es", "it"]
 
