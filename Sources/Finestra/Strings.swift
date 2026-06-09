@@ -40,6 +40,9 @@ enum Strings {
         "Placer la fenêtre du Finder au premier plan",
         "Colocar la ventana del Finder en primer plano",
         "Posiziona ora la finestra del Finder in primo piano") }
+    static var menuOnboarding: String { s(
+        "Einführung anzeigen …", "Show setup assistant …", "Afficher l'assistant …",
+        "Mostrar el asistente …", "Mostra l'assistente …") }
     static var menuLog: String { s("Protokoll anzeigen …", "Show log …", "Afficher le journal …", "Mostrar registro …", "Mostra registro …") }
     static var menuCheckUpdate: String { s("Nach Updates suchen …", "Check for updates …", "Rechercher des mises à jour …", "Buscar actualizaciones …", "Cerca aggiornamenti …") }
     static var menuQuit: String { s("Finestra beenden", "Quit Finestra", "Quitter Finestra", "Salir de Finestra", "Esci da Finestra") }

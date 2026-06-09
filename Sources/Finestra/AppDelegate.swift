@@ -93,6 +93,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                 action: #selector(openSettings), keyEquivalent: ","))
         menu.addItem(NSMenuItem(title: Strings.menuPlaceNow,
                                 action: #selector(placeNow), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: Strings.menuOnboarding,
+                                action: #selector(openOnboarding), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: Strings.menuLog,
                                 action: #selector(openLog), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: Strings.menuCheckUpdate,
@@ -125,6 +127,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openLog() { LogWindow.shared.present() }
+
+    @objc private func openOnboarding() { OnboardingWindow.shared.present() }
 
     /// Beim ersten Start (noch nicht abgeschlossen) den Einrichtungs-Assistenten zeigen.
     private func maybeShowOnboarding() {
