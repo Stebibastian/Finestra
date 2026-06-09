@@ -1,39 +1,57 @@
 import SwiftUI
 
 /// Zeigt die Release-Notes im „Update verfügbar"-Dialog (als NSAlert-accessoryView).
+/// Markdown wird über AttributedString gerendert (Text(LocalizedStringKey) parst
+/// Laufzeit-Strings NICHT) - so erscheinen Fett, Überschriften und Aufzählungen korrekt.
 struct UpdateView: View {
     let notes: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if lines.isEmpty {
+        VStack(alignment: .leading, spacing: 6) {
+            if items.isEmpty {
                 Text(Strings.updateBody).fixedSize(horizontal: false, vertical: true)
             } else {
                 Text(Strings.updateAvailableLabel)
                     .font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-                ForEach(lines, id: \.self) { line in
-                    Text(.init(line)).fixedSize(horizontal: false, vertical: true)
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                    Text(item).fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
         .font(.system(size: 13))
-        .frame(width: 420)
+        .frame(width: 420, alignment: .leading)
         .padding(.horizontal, 2)
     }
 
-    /// Release-Notes ohne Installations-/Signatur-Zeilen; „### X"→fett, „- "→„• ".
-    private var lines: [String] {
-        notes.split(separator: "\n").map(String.init).compactMap { raw in
+    /// Notes ohne Installations-/Signatur-Zeilen; Überschriften fett, „- " als „• ",
+    /// inline-Markdown (**fett** usw.) gerendert.
+    private var items: [AttributedString] {
+        notes.split(separator: "\n").map(String.init).compactMap { raw -> AttributedString? in
             let t = raw.trimmingCharacters(in: .whitespaces)
             let l = t.lowercased()
             if t.isEmpty || t == "```" || l.contains("install") || l.contains("curl ")
                 || l.contains("notarized") || l.contains("one-liner")
                 || l.contains("update via") || l.contains("requires macos") { return nil }
-            if t.hasPrefix("### ") { return "**" + t.dropFirst(4) + "**" }
-            if t.hasPrefix("## ") { return "**" + t.dropFirst(3) + "**" }
-            if t.hasPrefix("# ") { return "**" + t.dropFirst(2) + "**" }
-            return t.hasPrefix("- ") ? "• " + t.dropFirst(2) : t
+
+            if t.hasPrefix("#") {
+                let text = String(t.drop(while: { $0 == "#" }).trimmingCharacters(in: .whitespaces))
+                var a = Self.inline(text)
+                a.font = .system(size: 13, weight: .semibold)
+                return a
+            }
+            if t.hasPrefix("- ") {
+                return AttributedString("•  ") + Self.inline(String(t.dropFirst(2)))
+            }
+            return Self.inline(t)
         }
+    }
+
+    /// Parst inline-Markdown (Fett/Kursiv/Code) und behält Leerzeichen.
+    private static func inline(_ s: String) -> AttributedString {
+        (try? AttributedString(
+            markdown: s,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+            ?? AttributedString(s)
     }
 }
 
