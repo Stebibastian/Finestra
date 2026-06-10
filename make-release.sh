@@ -28,7 +28,9 @@ cp "AppSupport/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 xattr -cr "$APP" 2>/dev/null || true
 
 echo "→ Signiere mit Developer ID + Hardened Runtime …"
-codesign --force --options runtime --timestamp --sign "$SIGN_ID" "$APP"
+codesign --force --options runtime --timestamp \
+    --entitlements "$PROJ/AppSupport/Finestra.entitlements" \
+    --sign "$SIGN_ID" "$APP"
 codesign --verify --strict --verbose=2 "$APP"
 
 echo "→ ZIP fuer die Notarisierung …"

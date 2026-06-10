@@ -1,5 +1,4 @@
 import AppKit
-import ApplicationServices
 
 /// Position eines Fensters im sichtbaren Bereich eines Monitors (3×3-Raster).
 enum WindowPosition: Int, CaseIterable, Codable, Equatable {
@@ -60,16 +59,21 @@ struct Placement: Codable, Equatable {
     }
 }
 
-/// Setzt Position/Groesse echter Fenster ueber die Accessibility-API.
+/// Platziert Finder-Fenster über Finders eigenes AppleScript (`set bounds`).
+/// Das ist ruckelfrei und stabil - der Finder bewegt sein Fenster selbst und merkt
+/// sich die Position, statt es nach einem Setzen über die Bedienungshilfen
+/// zurückzuschieben (was Pingpong verursachte).
 enum WindowPlacer {
-    /// Platziert ein Fenster gemaess den aktuellen Einstellungen.
-    static func place(_ window: AXUIElement, windowID: CGWindowID? = nil) {
+    /// Wird aufgerufen, wenn die Automation-Berechtigung („Finder steuern") fehlt.
+    static var onPermissionDenied: (() -> Void)?
+
+    /// Platziert das vorderste Finder-Fenster gemäss den Einstellungen.
+    static func placeFrontWindow(windowID: CGWindowID? = nil) {
         let tag = windowID.map { "#\($0) " } ?? ""
         let screens = ScreenInfo.all()
         guard !screens.isEmpty else { Log.log("\(tag)Platzieren: keine Monitore gefunden"); return }
 
-        let pos = position(of: window)
-        let mouse = NSEvent.mouseLocation        // AppKit global, nur zur Diagnose im Log
+        let mouse = NSEvent.mouseLocation        // AppKit global, zur Diagnose im Log
         let target: ScreenInfo
         let how: String
         if Settings.targetMode == 1,
@@ -77,7 +81,6 @@ enum WindowPlacer {
             target = chosen
             how = "Fix → \(chosen.name)"
         } else if let m = ScreenInfo.screenUnderMouse(in: screens) {
-            // Standard: aktiver Monitor (wo der Mauszeiger ist).
             target = m
             how = "Maus → \(m.name)"
         } else {
@@ -85,110 +88,32 @@ enum WindowPlacer {
             how = "Rueckfall Haupt (\(target.name))"
         }
 
-        // Pro Monitor eigene Konfiguration (Fix-Modus: gewaehlter Monitor; sonst Maus). Stabiler Schlüssel.
         let cfg = Settings.config(forKey: target.stableKey)
         let rect = cfg.rect(in: target.visibleQuartz)
-
-        let posText = pos.map { "(\(Int($0.x)),\(Int($0.y)))" } ?? "nicht lesbar"
         let sizeText = cfg.sizeMode == 1
             ? "\(Int(cfg.percentW * 100))%×\(Int(cfg.percentH * 100))%"
             : "\(Int(cfg.width))×\(Int(cfg.height))px"
-        Log.log("\(tag)AX-Pos \(posText) | Maus(\(Int(mouse.x)),\(Int(mouse.y))) | \(how) | Konfig \(sizeText) | sichtbar \(rectText(target.visibleQuartz)) | setze \(rectText(rect))")
+        Log.log("\(tag)Maus(\(Int(mouse.x)),\(Int(mouse.y))) | \(how) | Konfig \(sizeText) | setze \(rectText(rect))")
 
-        // Der Finder schiebt ein neues Fenster oft ~1-2 s NACH dem Erstellen auf seine
-        // gemerkte Position zurück - also nach einem kurzen Setzen. Darum halten wir die
-        // Zielposition mehrere Sekunden und korrigieren gegen die ECHTE Position
-        // (CGWindowList; die AX-Rücklesung liefert faelschlich nur den gesetzten Wert),
-        // bis sie stabil ist.
-        setFrame(window, rect)
-        hold(window, rect, tag: tag, windowID: windowID, tick: 0, stable: 0)
-    }
-
-    private static let maxHoldTicks = 16        // ~16 × 0.25 s = 4 s Nachhalten
-    private static let holdInterval = 0.25
-
-    private static func hold(_ window: AXUIElement, _ rect: CGRect, tag: String,
-                             windowID: CGWindowID?, tick: Int, stable: Int) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + holdInterval) {
-            let after = (windowID.flatMap { realFrame(windowID: $0) }) ?? frame(of: window)
-            guard let after else {
-                if tick == 0 { Log.log("\(tag)Ergebnis nicht lesbar") }
-                return
-            }
-            let ok = abs(after.minX - rect.minX) < 16 && abs(after.minY - rect.minY) < 16
-                && abs(after.width - rect.width) < 16 && abs(after.height - rect.height) < 16
-            if ok {
-                let newStable = stable + 1
-                if newStable >= 3 || tick >= maxHoldTicks {
-                    Log.log("\(tag)Ergebnis \(rectText(after)) ✓")
-                    return
-                }
-                hold(window, rect, tag: tag, windowID: windowID, tick: tick + 1, stable: newStable)
+        if let err = FinderScript.setFrontWindowBounds(rect) {
+            if err == FinderScript.notAuthorized {
+                Log.log("\(tag)✗ keine Finder-Steuerungs-Berechtigung (Automation)")
+                DispatchQueue.main.async { onPermissionDenied?() }
             } else {
-                Log.log("\(tag)korrigiere \(rectText(after)) → \(rectText(rect))")
-                setFrame(window, rect)
-                if tick >= maxHoldTicks {
-                    Log.log("\(tag)Ergebnis \(rectText(after)) ✗ aufgegeben (Soll \(rectText(rect)))")
-                    return
-                }
-                hold(window, rect, tag: tag, windowID: windowID, tick: tick + 1, stable: 0)
+                Log.log("\(tag)✗ AppleScript-Fehler \(err)")
+            }
+            return
+        }
+        // Kurze Bestätigung gegen die echte Position (AppleScript ist stabil; eine Kontrolle reicht).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            if let after = FinderScript.frontWindowBounds() {
+                let ok = abs(after.minX - rect.minX) < 16 && abs(after.minY - rect.minY) < 16
+                Log.log("\(tag)Ergebnis \(rectText(after)) \(ok ? "✓" : "⚠")")
             }
         }
-    }
-
-    /// Echte On-Screen-Position eines Fensters über seine CGWindowID (Quartz, oben-links).
-    /// Zuverlässiger als die AX-Rücklesung, die manchmal nur den gesetzten Wert liefert.
-    static func realFrame(windowID: CGWindowID) -> CGRect? {
-        guard let infos = CGWindowListCopyWindowInfo([.optionIncludingWindow], windowID)
-                as? [[String: Any]],
-              let dict = infos.first?[kCGWindowBounds as String] as? [String: Any],
-              let x = (dict["X"] as? NSNumber)?.doubleValue,
-              let y = (dict["Y"] as? NSNumber)?.doubleValue,
-              let w = (dict["Width"] as? NSNumber)?.doubleValue,
-              let h = (dict["Height"] as? NSNumber)?.doubleValue else { return nil }
-        return CGRect(x: x, y: y, width: w, height: h)
     }
 
     private static func rectText(_ r: CGRect) -> String {
         "[x\(Int(r.minX)) y\(Int(r.minY)) \(Int(r.width))×\(Int(r.height))]"
-    }
-
-    /// Aktueller Rahmen (Position + Groesse) eines Fensters in Quartz-Koordinaten.
-    static func frame(of window: AXUIElement) -> CGRect? {
-        guard let pos = position(of: window) else { return nil }
-        var sizeValue: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &sizeValue) == .success,
-              let sizeValue else { return nil }
-        var size = CGSize.zero
-        // swiftlint:disable:next force_cast
-        AXValueGetValue(sizeValue as! AXValue, .cgSize, &size)
-        return CGRect(origin: pos, size: size)
-    }
-
-    /// Setzt Groesse + Position. Position wird zweimal gesetzt, weil manche Fenster
-    /// beim ersten Mal noch von ihrer alten Groesse her am Bildschirmrand klemmen.
-    static func setFrame(_ window: AXUIElement, _ rect: CGRect) {
-        var pos = rect.origin
-        var size = rect.size
-        if let p = AXValueCreate(.cgPoint, &pos) {
-            AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, p)
-        }
-        if let s = AXValueCreate(.cgSize, &size) {
-            AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, s)
-        }
-        if let p = AXValueCreate(.cgPoint, &pos) {
-            AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, p)
-        }
-    }
-
-    /// Aktuelle obere linke Ecke eines Fensters (Quartz), falls lesbar.
-    static func position(of window: AXUIElement) -> CGPoint? {
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &value) == .success,
-              let value else { return nil }
-        var point = CGPoint.zero
-        // swiftlint:disable:next force_cast
-        AXValueGetValue(value as! AXValue, .cgPoint, &point)
-        return point
     }
 }

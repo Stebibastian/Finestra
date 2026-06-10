@@ -146,8 +146,8 @@ final class FinderWatcher {
                 continue
             }
             Log.log("Neues Fenster \(id) erkannt")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                WindowPlacer.place(window, windowID: id)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                WindowPlacer.placeFrontWindow(windowID: id)
             }
         }
         // Geschlossene Fenster vergessen.
@@ -156,16 +156,7 @@ final class FinderWatcher {
 
     /// Manuell: vorderstes Finder-Fenster platzieren.
     func placeFrontmost() {
-        guard let app = finderApp else { Log.log("Manuell: kein Finder"); return }
-        var value: CFTypeRef?
-        if AXUIElementCopyAttributeValue(app, kAXFocusedWindowAttribute as CFString, &value) == .success,
-           let value {
-            // swiftlint:disable:next force_cast
-            let window = value as! AXUIElement
-            Log.log("Manuell: platziere vorderstes Fenster")
-            WindowPlacer.place(window, windowID: windowID(window))
-        } else {
-            Log.log("Manuell: kein vorderstes Fenster gefunden")
-        }
+        Log.log("Manuell: platziere vorderstes Fenster")
+        WindowPlacer.placeFrontWindow(windowID: nil)
     }
 }

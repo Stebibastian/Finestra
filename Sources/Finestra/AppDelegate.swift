@@ -25,8 +25,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
         let modeLabel = Settings.targetMode == 1 ? "Fester Monitor" : "Maus"
         Log.log("Finestra \(version) gestartet | Bedienungshilfen: \(trustedAtLaunch ? "erteilt" : "NICHT erteilt") | aktiv: \(Settings.enabled) | Modus: \(modeLabel)")
+        WindowPlacer.onPermissionDenied = { [weak self] in self?.showAutomationAlert() }
         if trustedAtLaunch {
             watcher.start()
+            ensureAutomationPermission()
             maybeShowOnboarding()
         } else {
             Log.log("Watcher startet nicht - warte auf Bedienungshilfen-Freigabe")
@@ -129,6 +131,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openLog() { LogWindow.shared.present() }
 
     @objc private func openOnboarding() { OnboardingWindow.shared.present() }
+
+    // MARK: - Finder-Steuerung (Automation)
+
+    /// Stösst beim Start den Automation-Berechtigungsdialog an, falls noch nicht erteilt.
+    /// Läuft im Hintergrund, damit der System-Dialog die App nicht kurz blockiert.
+    private func ensureAutomationPermission() {
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.6) { [weak self] in
+            let ok = FinderScript.requestPermission()
+            DispatchQueue.main.async {
+                if ok { Log.log("Finder-Steuerung (Automation): erlaubt") }
+                else { self?.showAutomationAlert() }
+            }
+        }
+    }
+
+    private var shownAutomationAlert = false
+    private func showAutomationAlert() {
+        guard !shownAutomationAlert else { return }
+        shownAutomationAlert = true
+        let alert = NSAlert()
+        alert.messageText = Strings.automationTitle
+        alert.informativeText = Strings.automationBody
+        alert.addButton(withTitle: Strings.openAutomationSettings)
+        alert.addButton(withTitle: Strings.ok)
+        NSApp.activate(ignoringOtherApps: true)
+        if alert.runModal() == .alertFirstButtonReturn {
+            let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!
+            NSWorkspace.shared.open(url)
+        }
+    }
 
     /// Beim ersten Start (noch nicht abgeschlossen) den Einrichtungs-Assistenten zeigen.
     private func maybeShowOnboarding() {

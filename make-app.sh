@@ -34,12 +34,13 @@ SIGN_DIR="$(mktemp -d)"
 SIGN_APP="$SIGN_DIR/$APP"
 cp -R "$APP" "$SIGN_APP"
 xattr -cr "$SIGN_APP" 2>/dev/null || true
+ENT="$(pwd)/AppSupport/Finestra.entitlements"
 if security find-identity -p codesigning 2>/dev/null | grep -qF "$CERT_NAME"; then
     echo "→ Signiere lautlos mit lokalem Zertifikat …"
-    codesign --force --sign "$CERT_NAME" --identifier com.realview.finestra "$SIGN_APP"
+    codesign --force --sign "$CERT_NAME" --entitlements "$ENT" --identifier com.realview.finestra "$SIGN_APP"
 else
     echo "→ Signiere ad-hoc (fuer stabile Rechte einmal ./make-cert.sh ausfuehren) …"
-    codesign --force --sign - --identifier com.realview.finestra "$SIGN_APP"
+    codesign --force --sign - --entitlements "$ENT" --identifier com.realview.finestra "$SIGN_APP"
 fi
 rm -rf "$APP"
 mv "$SIGN_APP" "$APP"

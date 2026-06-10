@@ -154,6 +154,19 @@ enum Strings {
     static var hintBottom: String { s("unten", "bottom", "bas", "abajo", "basso") }
     static var hintMain: String { s("Haupt", "Main", "Principal", "Principal", "Principale") }
 
+    // Finder-Steuerung (Automation)
+    static var automationTitle: String { s(
+        "Finder-Steuerung erlauben", "Allow controlling Finder", "Autoriser le contrôle du Finder",
+        "Permitir controlar el Finder", "Consentire il controllo del Finder") }
+    static var automationBody: String { s(
+        "Finestra braucht die Erlaubnis, den Finder zu steuern, um Fenster ruckelfrei zu platzieren. Bitte erlaube es unter Systemeinstellungen → Datenschutz & Sicherheit → Automation (Finestra → Finder).",
+        "Finestra needs permission to control the Finder to place windows smoothly. Please allow it in System Settings → Privacy & Security → Automation (Finestra → Finder).",
+        "Finestra a besoin de l'autorisation de contrôler le Finder pour placer les fenêtres sans à-coups. Autorisez-le dans Réglages → Confidentialité et sécurité → Automatisation (Finestra → Finder).",
+        "Finestra necesita permiso para controlar el Finder y colocar las ventanas sin saltos. Permítelo en Ajustes → Privacidad y seguridad → Automatización (Finestra → Finder).",
+        "Finestra ha bisogno dell'autorizzazione per controllare il Finder e posizionare le finestre senza scatti. Consentilo in Impostazioni → Privacy e sicurezza → Automazione (Finestra → Finder).") }
+    static var openAutomationSettings: String { s(
+        "Einstellungen öffnen", "Open Settings", "Ouvrir les réglages", "Abrir Ajustes", "Apri Impostazioni") }
+
     // MARK: Verschieben nach /Applications
     static var moveTitle: String { s(
         "Finestra in den Programme-Ordner verschieben?",
