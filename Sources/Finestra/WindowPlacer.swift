@@ -63,8 +63,7 @@ struct Placement: Codable, Equatable {
 /// Setzt Position/Groesse echter Fenster ueber die Accessibility-API.
 enum WindowPlacer {
     /// Platziert ein Fenster gemaess den aktuellen Einstellungen.
-    static func place(_ window: AXUIElement, windowID: CGWindowID? = nil,
-                      refetch: (() -> AXUIElement?)? = nil) {
+    static func place(_ window: AXUIElement, windowID: CGWindowID? = nil) {
         let tag = windowID.map { "#\($0) " } ?? ""
         let screens = ScreenInfo.all()
         guard !screens.isEmpty else { Log.log("\(tag)Platzieren: keine Monitore gefunden"); return }
@@ -96,36 +95,58 @@ enum WindowPlacer {
             : "\(Int(cfg.width))×\(Int(cfg.height))px"
         Log.log("\(tag)AX-Pos \(posText) | Maus(\(Int(mouse.x)),\(Int(mouse.y))) | \(how) | Konfig \(sizeText) | sichtbar \(rectText(target.visibleQuartz)) | setze \(rectText(rect))")
 
-        // Frisch erstellte Finder-Fenster sind manchmal noch nicht bereit und
-        // „verschlucken" die Groessenaenderung. Darum setzen wir mehrfach nach,
-        // bis der Rahmen wirklich passt - und holen pro Versuch ein frisches
-        // Fenster-Element (das alte kann „stale" sein → fuehrte zu winzigen Fenstern).
-        enforce(window, rect, tag: tag, attempt: 0, refetch: refetch)
+        // Der Finder schiebt ein neues Fenster oft ~1-2 s NACH dem Erstellen auf seine
+        // gemerkte Position zurück - also nach einem kurzen Setzen. Darum halten wir die
+        // Zielposition mehrere Sekunden und korrigieren gegen die ECHTE Position
+        // (CGWindowList; die AX-Rücklesung liefert faelschlich nur den gesetzten Wert),
+        // bis sie stabil ist.
+        setFrame(window, rect)
+        hold(window, rect, tag: tag, windowID: windowID, tick: 0, stable: 0)
     }
 
-    private static let retryDelays: [Double] = [0.2, 0.35, 0.5, 0.8]
+    private static let maxHoldTicks = 16        // ~16 × 0.25 s = 4 s Nachhalten
+    private static let holdInterval = 0.25
 
-    private static func enforce(_ window: AXUIElement, _ rect: CGRect, tag: String,
-                                attempt: Int, refetch: (() -> AXUIElement?)?) {
-        let element = refetch?() ?? window
-        setFrame(element, rect)
-        let delay = retryDelays[min(attempt, retryDelays.count - 1)]
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            let check = refetch?() ?? element
-            guard let after = frame(of: check) else {
-                Log.log("\(tag)Ergebnis nicht lesbar")
+    private static func hold(_ window: AXUIElement, _ rect: CGRect, tag: String,
+                             windowID: CGWindowID?, tick: Int, stable: Int) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + holdInterval) {
+            let after = (windowID.flatMap { realFrame(windowID: $0) }) ?? frame(of: window)
+            guard let after else {
+                if tick == 0 { Log.log("\(tag)Ergebnis nicht lesbar") }
                 return
             }
-            let ok = abs(after.width - rect.width) < 12 && abs(after.height - rect.height) < 12
+            let ok = abs(after.minX - rect.minX) < 16 && abs(after.minY - rect.minY) < 16
+                && abs(after.width - rect.width) < 16 && abs(after.height - rect.height) < 16
             if ok {
-                Log.log("\(tag)Ergebnis \(rectText(after)) ✓\(attempt > 0 ? " (Versuch \(attempt + 1))" : "")")
-            } else if attempt < retryDelays.count - 1 {
-                Log.log("\(tag)Ergebnis \(rectText(after)) ⚠ Versuch \(attempt + 1) zu klein/falsch, wiederhole")
-                enforce(check, rect, tag: tag, attempt: attempt + 1, refetch: refetch)
+                let newStable = stable + 1
+                if newStable >= 3 || tick >= maxHoldTicks {
+                    Log.log("\(tag)Ergebnis \(rectText(after)) ✓")
+                    return
+                }
+                hold(window, rect, tag: tag, windowID: windowID, tick: tick + 1, stable: newStable)
             } else {
-                Log.log("\(tag)Ergebnis \(rectText(after)) ✗ nach \(attempt + 1) Versuchen aufgegeben")
+                Log.log("\(tag)korrigiere \(rectText(after)) → \(rectText(rect))")
+                setFrame(window, rect)
+                if tick >= maxHoldTicks {
+                    Log.log("\(tag)Ergebnis \(rectText(after)) ✗ aufgegeben (Soll \(rectText(rect)))")
+                    return
+                }
+                hold(window, rect, tag: tag, windowID: windowID, tick: tick + 1, stable: 0)
             }
         }
+    }
+
+    /// Echte On-Screen-Position eines Fensters über seine CGWindowID (Quartz, oben-links).
+    /// Zuverlässiger als die AX-Rücklesung, die manchmal nur den gesetzten Wert liefert.
+    static func realFrame(windowID: CGWindowID) -> CGRect? {
+        guard let infos = CGWindowListCopyWindowInfo([.optionIncludingWindow], windowID)
+                as? [[String: Any]],
+              let dict = infos.first?[kCGWindowBounds as String] as? [String: Any],
+              let x = (dict["X"] as? NSNumber)?.doubleValue,
+              let y = (dict["Y"] as? NSNumber)?.doubleValue,
+              let w = (dict["Width"] as? NSNumber)?.doubleValue,
+              let h = (dict["Height"] as? NSNumber)?.doubleValue else { return nil }
+        return CGRect(x: x, y: y, width: w, height: h)
     }
 
     private static func rectText(_ r: CGRect) -> String {
