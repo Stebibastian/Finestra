@@ -114,6 +114,11 @@ final class FinderWatcher {
         Set(windows().compactMap { windowID($0) })
     }
 
+    /// Frisches AX-Element eines Fensters über seine stabile CGWindowID (für Platzierungs-Retries).
+    private func windowElement(byID id: CGWindowID) -> AXUIElement? {
+        windows().first { windowID($0) == id }
+    }
+
     private func isStandardWindow(_ element: AXUIElement) -> Bool {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, kAXSubroleAttribute as CFString, &value) == .success,
@@ -146,8 +151,9 @@ final class FinderWatcher {
                 continue
             }
             Log.log("Neues Fenster \(id) erkannt")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                WindowPlacer.place(window, windowID: id)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                WindowPlacer.place(window, windowID: id,
+                                   refetch: { [weak self] in self?.windowElement(byID: id) })
             }
         }
         // Geschlossene Fenster vergessen.

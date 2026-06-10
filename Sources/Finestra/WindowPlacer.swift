@@ -63,29 +63,30 @@ struct Placement: Codable, Equatable {
 /// Setzt Position/Groesse echter Fenster ueber die Accessibility-API.
 enum WindowPlacer {
     /// Platziert ein Fenster gemaess den aktuellen Einstellungen.
-    static func place(_ window: AXUIElement, windowID: CGWindowID? = nil) {
+    static func place(_ window: AXUIElement, windowID: CGWindowID? = nil,
+                      refetch: (() -> AXUIElement?)? = nil) {
         let tag = windowID.map { "#\($0) " } ?? ""
         let screens = ScreenInfo.all()
         guard !screens.isEmpty else { Log.log("\(tag)Platzieren: keine Monitore gefunden"); return }
 
         let pos = position(of: window)
+        let mouse = NSEvent.mouseLocation        // AppKit global, nur zur Diagnose im Log
         let target: ScreenInfo
         let how: String
         if Settings.targetMode == 1,
            let chosen = ScreenInfo.byID(Settings.targetDisplayID, in: screens) {
             target = chosen
             how = "Fix → \(chosen.name)"
-        } else if let mouse = ScreenInfo.screenUnderMouse(in: screens) {
+        } else if let m = ScreenInfo.screenUnderMouse(in: screens) {
             // Standard: aktiver Monitor (wo der Mauszeiger ist).
-            target = mouse
-            how = "Maus → \(mouse.name)"
+            target = m
+            how = "Maus → \(m.name)"
         } else {
             target = ScreenInfo.main(in: screens) ?? screens[0]
             how = "Rueckfall Haupt (\(target.name))"
         }
 
-        // Pro Monitor eigene Konfiguration (Folge-Modus: der Monitor, auf dem das
-        // Fenster aufgeht; Fix-Modus: der gewaehlte Zielmonitor). Stabiler Schlüssel.
+        // Pro Monitor eigene Konfiguration (Fix-Modus: gewaehlter Monitor; sonst Maus). Stabiler Schlüssel.
         let cfg = Settings.config(forKey: target.stableKey)
         let rect = cfg.rect(in: target.visibleQuartz)
 
@@ -93,21 +94,25 @@ enum WindowPlacer {
         let sizeText = cfg.sizeMode == 1
             ? "\(Int(cfg.percentW * 100))%×\(Int(cfg.percentH * 100))%"
             : "\(Int(cfg.width))×\(Int(cfg.height))px"
-        Log.log("\(tag)AX-Pos \(posText) | \(how) | Konfig \(sizeText) | sichtbar \(rectText(target.visibleQuartz)) | setze \(rectText(rect))")
+        Log.log("\(tag)AX-Pos \(posText) | Maus(\(Int(mouse.x)),\(Int(mouse.y))) | \(how) | Konfig \(sizeText) | sichtbar \(rectText(target.visibleQuartz)) | setze \(rectText(rect))")
 
         // Frisch erstellte Finder-Fenster sind manchmal noch nicht bereit und
         // „verschlucken" die Groessenaenderung. Darum setzen wir mehrfach nach,
-        // bis der Rahmen wirklich passt (oder geben nach einigen Versuchen auf).
-        enforce(window, rect, tag: tag, attempt: 0)
+        // bis der Rahmen wirklich passt - und holen pro Versuch ein frisches
+        // Fenster-Element (das alte kann „stale" sein → fuehrte zu winzigen Fenstern).
+        enforce(window, rect, tag: tag, attempt: 0, refetch: refetch)
     }
 
-    private static let retryDelays: [Double] = [0.15, 0.3, 0.5, 0.7]
+    private static let retryDelays: [Double] = [0.2, 0.35, 0.5, 0.8]
 
-    private static func enforce(_ window: AXUIElement, _ rect: CGRect, tag: String, attempt: Int) {
-        setFrame(window, rect)
+    private static func enforce(_ window: AXUIElement, _ rect: CGRect, tag: String,
+                                attempt: Int, refetch: (() -> AXUIElement?)?) {
+        let element = refetch?() ?? window
+        setFrame(element, rect)
         let delay = retryDelays[min(attempt, retryDelays.count - 1)]
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            guard let after = frame(of: window) else {
+            let check = refetch?() ?? element
+            guard let after = frame(of: check) else {
                 Log.log("\(tag)Ergebnis nicht lesbar")
                 return
             }
@@ -116,7 +121,7 @@ enum WindowPlacer {
                 Log.log("\(tag)Ergebnis \(rectText(after)) ✓\(attempt > 0 ? " (Versuch \(attempt + 1))" : "")")
             } else if attempt < retryDelays.count - 1 {
                 Log.log("\(tag)Ergebnis \(rectText(after)) ⚠ Versuch \(attempt + 1) zu klein/falsch, wiederhole")
-                enforce(window, rect, tag: tag, attempt: attempt + 1)
+                enforce(check, rect, tag: tag, attempt: attempt + 1, refetch: refetch)
             } else {
                 Log.log("\(tag)Ergebnis \(rectText(after)) ✗ nach \(attempt + 1) Versuchen aufgegeben")
             }
