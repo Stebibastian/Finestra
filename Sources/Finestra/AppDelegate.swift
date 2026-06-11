@@ -1,14 +1,10 @@
 import AppKit
 import SwiftUI
-import ApplicationServices
 import ServiceManagement
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private let watcher = FinderWatcher()
-    private var trustTimer: Timer?
-    private var didForceRelaunch = false
-    private var trustedAtLaunch = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Strings.lang = Settings.resolvedLanguage   // Sprache VOR dem ersten Text-/Menüaufbau setzen
@@ -20,26 +16,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if offerMoveToApplications() { return }   // verschiebt + startet neu → Rest ueberspringen
         autoCheckForUpdates()
 
-        promptAccessibility()
-        trustedAtLaunch = AXIsProcessTrusted()
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
         let modeLabel = Settings.targetMode == 1 ? "Fester Monitor" : "Maus"
-        Log.log("Finestra \(version) gestartet | Bedienungshilfen: \(trustedAtLaunch ? "erteilt" : "NICHT erteilt") | aktiv: \(Settings.enabled) | Modus: \(modeLabel)")
+        Log.log("Finestra \(version) gestartet | aktiv: \(Settings.enabled) | Modus: \(modeLabel)")
         WindowPlacer.onPermissionDenied = { [weak self] in self?.showAutomationAlert() }
-        if trustedAtLaunch {
-            watcher.start()
-            ensureAutomationPermission()
-            maybeShowOnboarding()
-        } else {
-            Log.log("Watcher startet nicht - warte auf Bedienungshilfen-Freigabe")
-            startTrustBackupPolling()
-        }
-
-        // Auf Aenderung der Bedienungshilfen-Freigabe lauschen und dann neu starten -
-        // ein frischer Prozess erhaelt den Accessibility-Zugriff zuverlaessig.
-        DistributedNotificationCenter.default().addObserver(
-            self, selector: #selector(accessibilityChanged),
-            name: NSNotification.Name("com.apple.accessibility.api"), object: nil)
+        watcher.start()
+        ensureAutomationPermission()
+        maybeShowOnboarding()
     }
 
     // MARK: - Hauptmenü (damit Cmd-C/V/X/A/Z in Textfeldern funktionieren)
@@ -124,7 +107,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openSettings() { SettingsWindow.shared.present() }
 
     @objc private func placeNow() {
-        guard AXIsProcessTrusted() else { promptAccessibility(); return }
         watcher.placeFrontmost()
     }
 
@@ -179,38 +161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - Bedienungshilfen
-
-    private func promptAccessibility() {
-        let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-        _ = AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
-    }
-
-    @objc private func accessibilityChanged() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-            guard let self, !self.didForceRelaunch else { return }
-            if AXIsProcessTrusted() != self.trustedAtLaunch {
-                self.didForceRelaunch = true
-                self.relaunchSelf()
-            }
-        }
-    }
-
-    private func startTrustBackupPolling() {
-        trustTimer?.invalidate()
-        let timer = Timer(timeInterval: 2.0, repeats: true) { [weak self] timer in
-            guard let self else { timer.invalidate(); return }
-            if self.didForceRelaunch { timer.invalidate(); return }
-            if !self.trustedAtLaunch && AXIsProcessTrusted() {
-                self.didForceRelaunch = true
-                timer.invalidate()
-                self.trustTimer = nil
-                self.relaunchSelf()
-            }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        trustTimer = timer
-    }
+    // MARK: - Neustart (für Sprachwechsel)
 
     private func relaunchSelf() {
         let path = Bundle.main.bundlePath

@@ -67,35 +67,57 @@ enum WindowPlacer {
     /// Wird aufgerufen, wenn die Automation-Berechtigung („Finder steuern") fehlt.
     static var onPermissionDenied: (() -> Void)?
 
-    /// Platziert das vorderste Finder-Fenster gemäss den Einstellungen.
-    static func placeFrontWindow(windowID: CGWindowID? = nil) {
-        let tag = windowID.map { "#\($0) " } ?? ""
-        let screens = ScreenInfo.all()
-        guard !screens.isEmpty else { Log.log("\(tag)Platzieren: keine Monitore gefunden"); return }
+    /// Platziert ein bestimmtes Finder-Fenster (über Finders eigene window id - robust).
+    static func placeWindow(finderID: Int) {
+        guard let (rect, info) = plan(tag: "#\(finderID) ") else { return }
+        apply(tag: "#\(finderID) ", info: info, rect: rect,
+              set: { FinderScript.setBounds(rect, id: finderID) },
+              read: { FinderScript.bounds(id: finderID) })
+    }
 
-        let mouse = NSEvent.mouseLocation        // AppKit global, zur Diagnose im Log
-        let target: ScreenInfo
-        let how: String
-        if Settings.targetMode == 1,
-           let chosen = ScreenInfo.byID(Settings.targetDisplayID, in: screens) {
-            target = chosen
-            how = "Fix → \(chosen.name)"
-        } else if let m = ScreenInfo.screenUnderMouse(in: screens) {
-            target = m
-            how = "Maus → \(m.name)"
-        } else {
-            target = ScreenInfo.main(in: screens) ?? screens[0]
-            how = "Rueckfall Haupt (\(target.name))"
+    /// Platziert das vorderste Finder-Fenster (manuell, window 1).
+    static func placeFrontWindow() {
+        guard let (rect, info) = plan(tag: "") else { return }
+        apply(tag: "", info: info, rect: rect,
+              set: { FinderScript.setFrontBounds(rect) },
+              read: { nil })
+    }
+
+    /// Berechnet Zielmonitor + Rechteck (NSScreen/Maus müssen auf den Main-Thread).
+    private static func plan(tag: String) -> (CGRect, String)? {
+        var result: (CGRect, String)?
+        DispatchQueue.main.sync {
+            let screens = ScreenInfo.all()
+            guard !screens.isEmpty else { Log.log("\(tag)keine Monitore gefunden"); return }
+            let mouse = NSEvent.mouseLocation
+            let target: ScreenInfo
+            let how: String
+            if Settings.targetMode == 1,
+               let chosen = ScreenInfo.byID(Settings.targetDisplayID, in: screens) {
+                target = chosen
+                how = "Fix → \(chosen.name)"
+            } else if let m = ScreenInfo.screenUnderMouse(in: screens) {
+                target = m
+                how = "Maus → \(m.name)"
+            } else {
+                target = ScreenInfo.main(in: screens) ?? screens[0]
+                how = "Rueckfall Haupt (\(target.name))"
+            }
+            let cfg = Settings.config(forKey: target.stableKey)
+            let rect = cfg.rect(in: target.visibleQuartz)
+            let sizeText = cfg.sizeMode == 1
+                ? "\(Int(cfg.percentW * 100))%×\(Int(cfg.percentH * 100))%"
+                : "\(Int(cfg.width))×\(Int(cfg.height))px"
+            result = (rect, "Maus(\(Int(mouse.x)),\(Int(mouse.y))) | \(how) | Konfig \(sizeText) | setze \(rectText(rect))")
         }
+        return result
+    }
 
-        let cfg = Settings.config(forKey: target.stableKey)
-        let rect = cfg.rect(in: target.visibleQuartz)
-        let sizeText = cfg.sizeMode == 1
-            ? "\(Int(cfg.percentW * 100))%×\(Int(cfg.percentH * 100))%"
-            : "\(Int(cfg.width))×\(Int(cfg.height))px"
-        Log.log("\(tag)Maus(\(Int(mouse.x)),\(Int(mouse.y))) | \(how) | Konfig \(sizeText) | setze \(rectText(rect))")
-
-        if let err = FinderScript.setFrontWindowBounds(rect) {
+    /// Setzt + verifiziert. LÄUFT AUF DER BG-QUEUE (osascript blockiert).
+    private static func apply(tag: String, info: String, rect: CGRect,
+                              set: () -> Int?, read: () -> CGRect?) {
+        Log.log("\(tag)\(info)")
+        if let err = set() {
             if err == FinderScript.notAuthorized {
                 Log.log("\(tag)✗ keine Finder-Steuerungs-Berechtigung (Automation)")
                 DispatchQueue.main.async { onPermissionDenied?() }
@@ -104,12 +126,11 @@ enum WindowPlacer {
             }
             return
         }
-        // Kurze Bestätigung gegen die echte Position (AppleScript ist stabil; eine Kontrolle reicht).
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            if let after = FinderScript.frontWindowBounds() {
-                let ok = abs(after.minX - rect.minX) < 16 && abs(after.minY - rect.minY) < 16
-                Log.log("\(tag)Ergebnis \(rectText(after)) \(ok ? "✓" : "⚠")")
-            }
+        // Kontrolle gegen die echte Position (osascript-Set ist stabil; eine Prüfung reicht).
+        Thread.sleep(forTimeInterval: 0.4)
+        if let after = read() {
+            let ok = abs(after.minX - rect.minX) < 16 && abs(after.minY - rect.minY) < 16
+            Log.log("\(tag)Ergebnis \(rectText(after)) \(ok ? "✓" : "⚠")")
         }
     }
 
